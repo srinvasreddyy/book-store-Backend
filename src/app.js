@@ -23,6 +23,8 @@ import bookRouter from "./api/routes/book.routes.js";
 import videoRouter from "./api/routes/video.routes.js";
 import announcementRouter from "./api/routes/announcement.routes.js";
 import discountRouter from "./api/routes/discount.routes.js";
+import cartRouter from "./api/routes/cart.routes.js";
+import orderRouter from "./api/routes/order.routes.js";
 
 
 // Routes Declaration
@@ -33,6 +35,8 @@ app.use("/api/v1/books", bookRouter);
 app.use("/api/v1/videos", videoRouter);
 app.use("/api/v1/announcements", announcementRouter);
 app.use("/api/v1/discounts", discountRouter);
+app.use("/api/v1/cart", cartRouter);
+app.use("/api/v1/orders", orderRouter);
 
 
 export { app };
