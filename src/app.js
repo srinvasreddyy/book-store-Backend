@@ -1,8 +1,23 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import { rateLimit } from 'express-rate-limit';
+import helmet from 'helmet';
+import { ApiError } from './utils/ApiError.js';
 
 const app = express();
+
+// Security middleware
+app.use(helmet());
+
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	limit: 100, // Limit each IP to 100 requests per windowMs
+	standardHeaders: 'draft-7',
+	legacyHeaders: false,
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+app.use(limiter);
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN,
@@ -40,5 +55,24 @@ app.use("/api/v1/cart", cartRouter);
 app.use("/api/v1/orders", orderRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+    if (err instanceof ApiError) {
+        return res.status(err.statusCode).json({
+            statusCode: err.statusCode,
+            message: err.message,
+            success: err.success,
+            errors: err.errors,
+        });
+    }
 
-export { app };
+    // For unhandled errors
+    console.error('Unhandled Error:', err); // Log the error for debugging
+    return res.status(500).json({
+        statusCode: 500,
+        message: 'Internal Server Error',
+        success: false,
+    });
+});
+
+export { app }; 
