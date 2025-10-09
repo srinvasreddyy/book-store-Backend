@@ -7,7 +7,7 @@ const bookSchema = new Schema(
             type: String,
             required: true,
             trim: true,
-            index: true,
+            index: "text", // Add text index for searching
         },
         description: {
             type: String,
@@ -16,6 +16,7 @@ const bookSchema = new Schema(
         author: {
             type: String,
             required: true,
+            index: "text", // Add text index for searching
         },
         price: {
             type: Number,

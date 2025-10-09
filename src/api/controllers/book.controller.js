@@ -40,14 +40,53 @@ const createBook = asyncHandler(async (req, res) => {
 });
 
 const getAllBooks = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType } = req.query;
+    const { page = 1, limit = 10, category, search, sortBy, sortOrder = 'asc' } = req.query;
+
     const options = {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
     };
 
-    const aggregate = Book.aggregate();
-    // Add search/filter logic here in the future if needed
+    const pipeline = [];
+
+    // Search stage
+    if (search) {
+        pipeline.push({
+            $search: {
+                index: 'default', // Assumes a default search index on title and author
+                text: {
+                    query: search,
+                    path: {
+                        'wildcard': '*'
+                    }
+                }
+            }
+        });
+    }
+
+    // Category filter stage
+    if (category) {
+        if (!mongoose.isValidObjectId(category)) {
+            throw new ApiError(400, "Invalid category ID");
+        }
+        pipeline.push({
+            $match: {
+                category: new mongoose.Types.ObjectId(category)
+            }
+        });
+    }
+
+    // Sorting stage
+    if (sortBy) {
+        const order = sortOrder === 'desc' ? -1 : 1;
+        pipeline.push({
+            $sort: {
+                [sortBy]: order
+            }
+        });
+    }
+
+    const aggregate = Book.aggregate(pipeline);
 
     const books = await Book.aggregatePaginate(aggregate, options);
 
