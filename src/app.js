@@ -22,6 +22,7 @@ import categoryRouter from "./api/routes/category.routes.js";
 import bookRouter from "./api/routes/book.routes.js";
 import videoRouter from "./api/routes/video.routes.js";
 import announcementRouter from "./api/routes/announcement.routes.js";
+import discountRouter from "./api/routes/discount.routes.js";
 
 
 // Routes Declaration
@@ -31,6 +32,7 @@ app.use("/api/v1/categories", categoryRouter);
 app.use("/api/v1/books", bookRouter);
 app.use("/api/v1/videos", videoRouter);
 app.use("/api/v1/announcements", announcementRouter);
+app.use("/api/v1/discounts", discountRouter);
 
 
 export { app };
