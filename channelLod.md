@@ -16,6 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   **feat(core):** Implemented a global error handling middleware for consistent error responses.
 
 **Files Changed:**
-├── package.json
-└── src/
-└── app.js
+- ├── package.json
+- └── src/
+- └── app.js
