@@ -2,46 +2,44 @@ import mongoose, { Schema } from "mongoose";
 import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 const orderedItemSchema = new Schema({
-    book: {
-        type: Schema.Types.ObjectId,
-        ref: "Book"
-    },
-    quantity: {
-        type: Number,
-        required: true,
-    },
-    priceAtPurchase: {
-        type: Number,
-        required: true,
-    },
+    book: { type: Schema.Types.ObjectId, ref: "Book" },
+    quantity: { type: Number, required: true },
+    priceAtPurchase: { type: Number, required: true },
+    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
 });
 
 const orderSchema = new Schema(
     {
-        user: {
-            type: Schema.Types.ObjectId,
-            ref: "User",
-            required: true,
-        },
+        user: { type: Schema.Types.ObjectId, ref: "User", required: true },
         items: [orderedItemSchema],
         status: {
             type: String,
-            enum: ['PENDING', 'COMPLETED', 'CANCELLED'],
+            enum: ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'FAILED'],
             default: 'PENDING',
         },
-        subtotal: {
-            type: Number,
+        // --- Pricing Breakdown ---
+        subtotal: { type: Number, required: true },
+        discountAmount: { type: Number, default: 0 },
+        handlingFee: { type: Number, required: true },
+        deliveryFee: { type: Number, required: true },
+        finalAmount: { type: Number, required: true },
+        
+        appliedDiscount: { type: Schema.Types.ObjectId, ref: "Discount" },
+
+        // --- Payment Details ---
+        paymentMethod: {
+            type: String,
+            enum: ['CARD', 'UPI', 'RAZORPAY', 'CASH_ON_DELIVERY'],
             required: true,
         },
-        appliedDiscount: {
-            type: Schema.Types.ObjectId,
-            ref: "Discount",
+        paymentStatus: {
+            type: String,
+            enum: ['PENDING', 'COMPLETED', 'FAILED'],
+            default: 'PENDING',
         },
-        totalAmount: {
-            type: Number,
-            required: true,
-        },
-        // In a real app, you would have shippingAddress, paymentDetails, etc.
+        razorpayOrderId: { type: String },
+        razorpayPaymentId: { type: String },
+        razorpaySignature: { type: String },
     },
     {
         timestamps: true,

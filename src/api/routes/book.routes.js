@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
     createBook,
     getAllBooks,
+    getAdminBooks,
     getBookById,
     updateBookDetails,
     deleteBook,
@@ -17,6 +18,8 @@ router.route("/").get(getAllBooks);
 router.route("/:bookId").get(getBookById);
 
 // Admin routes
+router.route("/admin/my-books").get(verifyJWT, verifyAdmin, getAdminBooks);
+
 router
     .route("/")
     .post(verifyJWT, verifyAdmin, upload.single("coverImage"), createBook);

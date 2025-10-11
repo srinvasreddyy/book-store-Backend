@@ -1,5 +1,18 @@
 import mongoose, { Schema } from "mongoose";
 
+const userUsageSchema = new Schema({
+    user: {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    count: {
+        type: Number,
+        required: true,
+        default: 0,
+    }
+});
+
 const discountSchema = new Schema(
     {
         couponCode: {
@@ -15,14 +28,33 @@ const discountSchema = new Schema(
         },
         type: {
             type: String,
-            enum: ['PERCENTAGE', 'FIXED_AMOUNT'],
+            enum: ['PERCENTAGE', 'FIXED_AMOUNT', 'FREE_DELIVERY'],
             required: true,
         },
         value: {
             type: Number,
-            required: true,
+            required: function() { return this.type !== 'FREE_DELIVERY'; }, // Not required for free delivery
             min: 0,
         },
+        minCartValue: {
+            type: Number,
+            default: 0,
+        },
+        maxUses: { // Total number of times the coupon can be used
+            type: Number,
+            required: true,
+            min: 1,
+        },
+        maxUsesPerUser: { // Number of times a single user can use it
+            type: Number,
+            required: true,
+            min: 1,
+        },
+        timesUsed: {
+            type: Number,
+            default: 0,
+        },
+        usedBy: [userUsageSchema],
         isActive: {
             type: Boolean,
             default: true,
@@ -35,15 +67,11 @@ const discountSchema = new Schema(
             type: Date,
             default: null,
         },
-        applicableTo: {
-            type: String,
-            enum: ['ALL_PRODUCTS', 'CATEGORY'],
-            default: 'ALL_PRODUCTS',
-        },
-        applicableCategory: {
+        owner: {
             type: Schema.Types.ObjectId,
-            ref: "Category",
-        },
+            ref: "User",
+            required: true,
+        }
     },
     {
         timestamps: true,

@@ -7,17 +7,67 @@ const bookSchema = new Schema(
             type: String,
             required: true,
             trim: true,
-            index: "text", // Add text index for searching
-        },
-        description: {
-            type: String,
-            required: true,
+            index: "text",
         },
         author: {
             type: String,
             required: true,
-            index: "text", // Add text index for searching
+            trim: true,
+            index: "text",
         },
+        isbn: {
+            type: String,
+            required: true,
+            unique: true,
+            trim: true,
+            validate: {
+                validator: function (v) {
+                    // ISBN-10 or ISBN-13
+                    return /^(?=(?:\D*\d){10}(?:(?:\D*\d){3})?$)[\d-]+$/.test(v);
+                },
+                message: props => `${props.value} is not a valid ISBN!`
+            },
+        },
+        publisher: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        numberOfPages: {
+            type: Number,
+            required: true,
+            min: 1,
+        },
+        category: {
+            type: Schema.Types.ObjectId,
+            ref: "Category",
+            required: true,
+        },
+        format: {
+            type: String,
+            required: true,
+            enum: ['eBook', 'Hardcover', 'Paperback', 'Audiobook'],
+        },
+        language: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        shortDescription: {
+            type: String,
+            required: true,
+            trim: true,
+            maxlength: 250,
+        },
+        fullDescription: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        tags: [{
+            type: Schema.Types.ObjectId,
+            ref: "Tag",
+        }],
         price: {
             type: Number,
             required: true,
@@ -29,23 +79,15 @@ const bookSchema = new Schema(
             min: 0,
             default: 0,
         },
-        category: {
-            type: Schema.Types.ObjectId,
-            ref: "Category",
-            required: true,
-        },
-        isbn: {
-            type: String,
-            unique: true,
-            trim: true,
-        },
-        publisher: {
-            type: String,
-        },
         coverImage: {
             type: String, // URL from Cloudinary
             required: true,
         },
+        uploadedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            required: true,
+        }
     },
     {
         timestamps: true,

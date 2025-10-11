@@ -1,8 +1,8 @@
 import { Router } from "express";
 import {
     createDiscount,
-    getAllDiscounts,
-    getDiscountByCode,
+    getMyDiscounts,
+    validateDiscount,
     updateDiscount,
     deleteDiscount
 } from "../controllers/discount.controller.js";
@@ -11,13 +11,15 @@ import { verifyAdmin } from "../middlewares/rbac.middleware.js";
 
 const router = Router();
 
-// Public route for coupon validation
-router.route("/code/:couponCode").get(getDiscountByCode);
+// Public route for coupon validation (can be used by logged-in or guest users)
+router.route("/validate").post(verifyJWT, validateDiscount);
 
 // Admin routes
-router.route("/all").get(verifyJWT, verifyAdmin, getAllDiscounts);
-router.route("/").post(verifyJWT, verifyAdmin, createDiscount);
-router.route("/:discountId").patch(verifyJWT, verifyAdmin, updateDiscount);
-router.route("/:discountId").delete(verifyJWT, verifyAdmin, deleteDiscount);
+router.use(verifyJWT, verifyAdmin);
+
+router.route("/").post(createDiscount);
+router.route("/my-discounts").get(getMyDiscounts);
+router.route("/:discountId").patch(updateDiscount);
+router.route("/:discountId").delete(deleteDiscount);
 
 export default router;

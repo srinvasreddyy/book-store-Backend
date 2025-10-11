@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### `feature-FEATURE-018`
+
+-   **feat(admin):** Overhauled the discount system to support Percentage, Flat Amount, and Free Delivery coupons.
+-   **feat(admin):** Added robust validation rules to coupons, including minimum cart value, total usage limits, and per-user limits.
+-   **feat(admin):** Implemented ownership for coupons, allowing admins to manage only the discounts they create.
+-   **refactor(order):** Rewrote the checkout logic to handle complex discount validation and application in a transaction-safe manner.
+-   **refactor(model):** Significantly updated the `Discount` and `Order` models to support the new pricing rules.
+
+
+### `feature-FEATURE-017`
+
+-   **feat(admin):** Implemented a system for admins to create and manage their own book categories.
+-   **feat(admin):** Created endpoints for admins to list their categories and see the books published under each one.
+-   **refactor(model):** Major schema change for `Book` and `Category` models to support a unified, reference-based category system.
+-   **refactor(book):** Updated book creation and retrieval logic to handle the new category system and populate category data.
+
+### `feature-FEATURE-016`
+
+-   **feat(homepage):** Implemented a new system for admins to create and manage a personal homepage.
+-   **feat(homepage):** Added support for three content types: carousel images, YouTube videos, and uploaded short videos.
+-   **feat(homepage):** Created new models, controllers, and routes to handle all homepage functionality.
+-   **feat(homepage):** Implemented a public endpoint to view admin homepages by username.
+-   **feat(upload):** Added server-side validation to ensure uploaded short videos are under 3 minutes.
+
+
+### `feature-FEATURE-015`
+
+-   **feat(admin):** Added `uploadedBy` to the `orderedItemSchema` to track book ownership in sales.
+-   **feat(admin):** Implemented a new dashboard endpoint for admins to view their personal sales revenue and units sold.
+-   **refactor(order):** Updated the checkout process to correctly attribute sold items to the admin who uploaded them.
+
+
+### `feature-FEATURE-014`
+
+-   **feat(admin):** Added `uploadedBy` field to the Book model to track ownership.
+-   **feat(admin):** Implemented a new endpoint for admins to view only their own uploaded books.
+-   **feat(admin):** Created a new dashboard endpoint to provide book-related statistics for the logged-in admin.
+-   **security(admin):** Enforced ownership checks on book update and delete operations, preventing admins from modifying each other's data.
+
+
+### `feature-FEATURE-013`
+
+-   **feat(admin):** Expanded the Book model with detailed fields including ISBN, publisher, pages, format, language, and descriptions.
+-   **feat(admin):** Implemented a standalone Tag model and linked it to books.
+-   **feat(admin):** Added robust validation for all new book fields in the controller.
+-   **refactor(user):** Simplified the User model's `role` enum to only 'CUSTOMER' and 'ADMIN'.
+
 ### `feature-FEATURE-012`
 
 -   **feat(security):** Integrated `helmet` to set secure HTTP headers.

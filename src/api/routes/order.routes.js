@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { checkout } from "../controllers/order.controller.js";
+import { initiateOrder } from "../controllers/order.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.use(verifyJWT); // Apply verifyJWT middleware to all routes in this file
+router.use(verifyJWT);
 
-router.route("/checkout").post(checkout);
+router.route("/initiate").post(initiateOrder);
 
 export default router;

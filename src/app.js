@@ -7,27 +7,30 @@ import { ApiError } from './utils/ApiError.js';
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
-
-const limiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 100, // Limit each IP to 100 requests per windowMs
-	standardHeaders: 'draft-7',
-	legacyHeaders: false,
-    message: 'Too many requests from this IP, please try again after 15 minutes'
-});
-app.use(limiter);
-
 app.use(cors({
     origin: process.env.CORS_ORIGIN,
     credentials: true
 }));
 
+// The Razorpay webhook needs the raw body, so we place this before the global json parser
+import paymentRouter from "./api/routes/payment.routes.js";
+app.use("/api/v1/payments", paymentRouter);
+
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
+app.use(helmet());
+
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, 
+	limit: 100,
+	standardHeaders: 'draft-7',
+	legacyHeaders: false,
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+app.use(limiter);
 
 
 // Routes Import
@@ -41,6 +44,8 @@ import discountRouter from "./api/routes/discount.routes.js";
 import cartRouter from "./api/routes/cart.routes.js";
 import orderRouter from "./api/routes/order.routes.js";
 import dashboardRouter from "./api/routes/dashboard.routes.js";
+import tagRouter from "./api/routes/tag.routes.js";
+import homepageRouter from "./api/routes/homepage.routes.js";
 
 
 // Routes Declaration
@@ -54,6 +59,8 @@ app.use("/api/v1/discounts", discountRouter);
 app.use("/api/v1/cart", cartRouter);
 app.use("/api/v1/orders", orderRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
+app.use("/api/v1/tags", tagRouter);
+app.use("/api/v1/homepage", homepageRouter);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -66,8 +73,7 @@ app.use((err, req, res, next) => {
         });
     }
 
-    // For unhandled errors
-    console.error('Unhandled Error:', err); // Log the error for debugging
+    console.error('Unhandled Error:', err);
     return res.status(500).json({
         statusCode: 500,
         message: 'Internal Server Error',
@@ -75,4 +81,4 @@ app.use((err, req, res, next) => {
     });
 });
 
-export { app }; 
+export { app };
