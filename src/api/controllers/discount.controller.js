@@ -11,14 +11,30 @@ const createDiscount = asyncHandler(async (req, res) => {
     } = req.body;
     const adminId = req.user._id;
 
-    if (!couponCode || !description || !type || !maxUses || !maxUsesPerUser) {
-        throw new ApiError(400, "Coupon code, description, type, max uses, and max uses per user are required.");
-    }
-    if (type !== 'FREE_DELIVERY' && (!value || value <= 0)) {
-        throw new ApiError(400, "A value is required for this discount type.");
+    // --- Input Validation ---
+    if (!couponCode || couponCode.trim() === "") throw new ApiError(400, "Coupon code is required.");
+    if (!description || description.trim() === "") throw new ApiError(400, "Description is required.");
+    
+    const allowedTypes = ['PERCENTAGE', 'FIXED_AMOUNT', 'FREE_DELIVERY'];
+    if (!type || !allowedTypes.includes(type)) {
+        throw new ApiError(400, `Discount type must be one of: ${allowedTypes.join(', ')}.`);
     }
 
-    const existingDiscount = await Discount.findOne({ couponCode });
+    if (type !== 'FREE_DELIVERY') {
+        if (value === undefined || isNaN(Number(value)) || Number(value) <= 0) {
+            throw new ApiError(400, "A positive numeric value is required for this discount type.");
+        }
+    }
+    
+    const numericFields = { maxUses, maxUsesPerUser };
+    for (const [field, val] of Object.entries(numericFields)) {
+        if (val === undefined || isNaN(Number(val)) || Number(val) < 1) {
+            throw new ApiError(400, `${field} must be a positive integer.`);
+        }
+    }
+    // --- End Validation ---
+
+    const existingDiscount = await Discount.findOne({ couponCode: couponCode.trim().toUpperCase() });
     if (existingDiscount) {
         throw new ApiError(409, "A discount with this coupon code already exists.");
     }
@@ -28,7 +44,7 @@ const createDiscount = asyncHandler(async (req, res) => {
         description,
         type,
         value: type === 'FREE_DELIVERY' ? 0 : value,
-        minCartValue,
+        minCartValue: minCartValue || 0,
         maxUses,
         maxUsesPerUser,
         startDate,
@@ -38,57 +54,68 @@ const createDiscount = asyncHandler(async (req, res) => {
 
     return res
         .status(201)
-        .json(new ApiResponse(201, discount, "Discount created successfully"));
+        .json(new ApiResponse(201, discount, "Discount created successfully."));
 });
 
 const getMyDiscounts = asyncHandler(async (req, res) => {
     const discounts = await Discount.find({ owner: req.user._id }).sort({ createdAt: -1 });
     return res
         .status(200)
-        .json(new ApiResponse(200, discounts, "Your discounts fetched successfully"));
+        .json(new ApiResponse(200, discounts, "Your discounts fetched successfully."));
 });
 
 const validateDiscount = asyncHandler(async (req, res) => {
     const { couponCode, cartSubtotal } = req.body;
-    const userId = req.user?._id; // User might not be logged in when checking
+    const userId = req.user?._id;
     const now = new Date();
 
-    if (!couponCode || cartSubtotal === undefined) {
-        throw new ApiError(400, "Coupon code and cart subtotal are required.");
+    // --- Input Validation ---
+    if (!couponCode || couponCode.trim() === "") {
+        throw new ApiError(400, "Coupon code is required.");
     }
+    if (cartSubtotal === undefined || isNaN(Number(cartSubtotal)) || Number(cartSubtotal) < 0) {
+        throw new ApiError(400, "A valid, non-negative cart subtotal is required.");
+    }
+    // --- End Validation ---
 
     const discount = await Discount.findOne({
         couponCode: couponCode.toUpperCase(),
         isActive: true,
     });
 
-    if (!discount) throw new ApiError(404, "Invalid coupon code.");
+    if (!discount) throw new ApiError(404, "Invalid or inactive coupon code.");
     if (discount.timesUsed >= discount.maxUses) throw new ApiError(400, "This coupon has reached its usage limit.");
-    if (cartSubtotal < discount.minCartValue) throw new ApiError(400, `Cart must be at least $${discount.minCartValue} to use this coupon.`);
+    if (cartSubtotal < discount.minCartValue) throw new ApiError(400, `A minimum cart value of ${discount.minCartValue} is required to use this coupon.`);
     
-    // Date validation
     if (discount.startDate && discount.startDate > now) throw new ApiError(400, "This coupon is not yet active.");
     if (discount.endDate && discount.endDate < now) throw new ApiError(400, "This coupon has expired.");
 
-    // Per-user usage validation
     if (userId) {
         const userUsage = discount.usedBy.find(u => u.user.toString() === userId.toString());
         if (userUsage && userUsage.count >= discount.maxUsesPerUser) {
-            throw new ApiError(400, "You have already used this coupon the maximum number of times.");
+            throw new ApiError(403, "You have already used this coupon the maximum number of times allowed.");
         }
     }
 
-    return res.status(200).json(new ApiResponse(200, discount, "Coupon is valid and applicable."));
+    return res.status(200).json(new ApiResponse(200, discount, "Coupon is valid."));
 });
-
 
 const updateDiscount = asyncHandler(async (req, res) => {
     const { discountId } = req.params;
+
+    // --- Input Validation ---
+    if (!mongoose.isValidObjectId(discountId)) {
+        throw new ApiError(400, "Invalid discount ID format.");
+    }
+    if (Object.keys(req.body).length === 0) {
+        throw new ApiError(400, "No fields provided for update.");
+    }
+    // --- End Validation ---
     
     const discount = await Discount.findOneAndUpdate(
         { _id: discountId, owner: req.user._id },
         { $set: req.body }, 
-        { new: true }
+        { new: true, runValidators: true }
     );
 
     if (!discount) {
@@ -97,21 +124,26 @@ const updateDiscount = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, discount, "Discount updated successfully"));
+        .json(new ApiResponse(200, discount, "Discount updated successfully."));
 });
 
 const deleteDiscount = asyncHandler(async (req, res) => {
     const { discountId } = req.params;
 
-    const discount = await Discount.findOneAndDelete({ _id: discountId, owner: req.user._id });
+    // --- Input Validation ---
+    if (!mongoose.isValidObjectId(discountId)) {
+        throw new ApiError(400, "Invalid discount ID format.");
+    }
+    // --- End Validation ---
 
+    const discount = await Discount.findOneAndDelete({ _id: discountId, owner: req.user._id });
     if (!discount) {
         throw new ApiError(404, "Discount not found or you don't have permission to delete it.");
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "Discount deleted successfully"));
+        .json(new ApiResponse(200, {}, "Discount deleted successfully."));
 });
 
 export {
