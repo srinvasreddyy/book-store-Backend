@@ -7,26 +7,44 @@ import mongoose from "mongoose";
 
 const getCart = asyncHandler(async (req, res) => {
     const cart = await Cart.findOne({ user: req.user._id }).populate("items.book");
-    
+
     if (!cart) {
         // If no cart, create one and return it
         const newCart = await Cart.create({ user: req.user._id, items: [] });
         return res.status(200).json(new ApiResponse(200, newCart, "Cart is empty"));
     }
 
-    return res.status(200).json(new ApiResponse(200, cart, "Cart fetched successfully"));
+    // Add stock availability information
+    const itemsWithStockInfo = cart.items.map(item => ({
+        ...item.toObject(),
+        isAvailable: item.book.stock >= item.quantity,
+        availableStock: item.book.stock
+    }));
+
+    const cartWithStockInfo = {
+        ...cart.toObject(),
+        items: itemsWithStockInfo
+    };
+
+
+    return res.status(200).json(new ApiResponse(200, cartWithStockInfo, "Cart fetched successfully"));
 });
 
 const addItemToCart = asyncHandler(async (req, res) => {
     const { bookId, quantity } = req.body;
-    
-    if (!mongoose.isValidObjectId(bookId) || !quantity || quantity < 1) {
+    const parsedQuantity = parseInt(quantity, 10);
+
+    if (!mongoose.isValidObjectId(bookId) || !parsedQuantity || parsedQuantity < 1) {
         throw new ApiError(400, "Valid book ID and quantity are required");
     }
 
     const book = await Book.findById(bookId);
     if (!book) {
         throw new ApiError(404, "Book not found");
+    }
+
+    if (book.stock < parsedQuantity) {
+        throw new ApiError(400, `Only ${book.stock} items are available in stock.`);
     }
 
     let cart = await Cart.findOne({ user: req.user._id });
@@ -39,14 +57,18 @@ const addItemToCart = asyncHandler(async (req, res) => {
 
     if (existingItemIndex > -1) {
         // Update quantity if item already in cart
-        cart.items[existingItemIndex].quantity = quantity;
+        const newQuantity = cart.items[existingItemIndex].quantity + parsedQuantity;
+        if (book.stock < newQuantity) {
+            throw new ApiError(400, `Cannot add more items than available in stock. You already have ${cart.items[existingItemIndex].quantity} in cart.`);
+        }
+        cart.items[existingItemIndex].quantity = newQuantity;
     } else {
         // Add new item to cart
-        cart.items.push({ book: bookId, quantity });
+        cart.items.push({ book: bookId, quantity: parsedQuantity });
     }
 
     await cart.save();
-    
+
     const populatedCart = await cart.populate("items.book");
 
     return res.status(200).json(new ApiResponse(200, populatedCart, "Item added to cart successfully"));

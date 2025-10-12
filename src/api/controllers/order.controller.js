@@ -4,8 +4,10 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Cart } from "../models/cart.model.js";
 import { Order } from "../models/order.model.js";
 import { Discount } from "../models/discount.model.js";
+import { Book } from "../models/book.model.js";
 import { HANDLING_FEE, BASE_DELIVERY_FEE } from "../../constants.js";
 import Razorpay from "razorpay";
+import mongoose from "mongoose";
 
 const instance = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -25,6 +27,14 @@ const initiateOrder = asyncHandler(async (req, res) => {
     if (!cart || cart.items.length === 0) {
         throw new ApiError(400, "Your cart is empty");
     }
+
+    // --- 0. Pre-order Stock Validation ---
+    for (const item of cart.items) {
+        if (item.book.stock < item.quantity) {
+            throw new ApiError(400, `The item '${item.book.title}' is out of stock or the requested quantity is not available.`);
+        }
+    }
+
 
     // --- 1. Calculate Pricing ---
     let subtotal = 0;
@@ -80,6 +90,11 @@ const initiateOrder = asyncHandler(async (req, res) => {
         order.status = 'PROCESSING';
         order.paymentStatus = 'PENDING'; // Payment will be completed on delivery
         await order.save();
+
+        // Decrement stock for COD
+        for (const item of orderedItems) {
+            await Book.findByIdAndUpdate(item.book, { $inc: { stock: -item.quantity } });
+        }
         
         // Clear cart for COD
         await Cart.findOneAndUpdate({ user: userId }, { $set: { items: [] } });

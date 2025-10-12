@@ -3,6 +3,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Order } from "../models/order.model.js";
 import { Cart } from "../models/cart.model.js";
+import { Book } from "../models/book.model.js";
 import crypto from "crypto";
 import mongoose from "mongoose";
 
@@ -52,6 +53,12 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
             // A more robust system would use a retry mechanism.
             throw new ApiError(404, "Order not found for this payment.");
         }
+
+        // Decrement stock
+        for (const item of order.items) {
+            await Book.findByIdAndUpdate(item.book, { $inc: { stock: -item.quantity } }, { session });
+        }
+
 
         // Clear the user's cart
         await Cart.findOneAndUpdate({ user: order.user }, { $set: { items: [] } }, { session });

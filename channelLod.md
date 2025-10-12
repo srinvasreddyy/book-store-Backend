@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### `feature-FEATURE-019`
+
+-   **feat(cart):** Added stock validation when adding items to the cart.
+-   **feat(cart):** The cart view now indicates if an item has sufficient stock.
+-   **feat(order):** Implemented pre-order stock validation to prevent ordering out-of-stock items.
+-   **refactor(order):** Stock is now decremented upon successful order creation (both COD and online).
 
 ### `feature-FEATURE-018`
 
