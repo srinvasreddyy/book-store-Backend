@@ -23,7 +23,7 @@ const orderSchema = new Schema(
         handlingFee: { type: Number, required: true },
         deliveryFee: { type: Number, required: true },
         finalAmount: { type: Number, required: true },
-        
+
         appliedDiscount: { type: Schema.Types.ObjectId, ref: "Discount" },
 
         // --- Payment Details ---
@@ -40,6 +40,7 @@ const orderSchema = new Schema(
         razorpayOrderId: { type: String },
         razorpayPaymentId: { type: String },
         razorpaySignature: { type: String },
+        idempotencyKey: { type: String, unique: true, sparse: true },
     },
     {
         timestamps: true,

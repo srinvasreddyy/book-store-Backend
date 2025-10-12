@@ -3,7 +3,11 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
+import xss from 'xss-clean';
+import csurf from 'csurf';
 import { ApiError } from './utils/ApiError.js';
+import logger from "./utils/logger.js";
 
 const app = express();
 
@@ -21,10 +25,45 @@ app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
-app.use(helmet());
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'", "'unsafe-inline'"],
+                styleSrc: ["'self'", "'unsafe-inline'"],
+                imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+                connectSrc: ["'self'"],
+                fontSrc: ["'self'"],
+                objectSrc: ["'none'"],
+                mediaSrc: ["'self'"],
+                frameSrc: ["'none'"],
+            },
+        },
+        hsts: {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true,
+        },
+        frameguard: {
+            action: 'deny',
+        },
+        xssFilter: true,
+        noSniff: true,
+    })
+);
+app.use(mongoSanitize());
+app.use(xss());
+
+const csrfProtection = csurf({ cookie: true });
+app.use(csrfProtection);
+
+app.get('/api/v1/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+});
 
 const limiter = rateLimit({
-	windowMs: 15 * 60 * 1000, 
+	windowMs: 15 * 60 * 1000,
 	limit: 100,
 	standardHeaders: 'draft-7',
 	legacyHeaders: false,
@@ -64,7 +103,16 @@ app.use("/api/v1/homepage", homepageRouter);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+    if (err.code === 'EBADCSRFTOKEN') {
+        logger.error(err);
+        return res.status(403).json({
+            statusCode: 403,
+            message: 'Invalid CSRF token',
+            success: false,
+        });
+    }
     if (err instanceof ApiError) {
+        logger.error(err);
         return res.status(err.statusCode).json({
             statusCode: err.statusCode,
             message: err.message,
@@ -73,7 +121,7 @@ app.use((err, req, res, next) => {
         });
     }
 
-    console.error('Unhandled Error:', err);
+    logger.error(err);
     return res.status(500).json({
         statusCode: 500,
         message: 'Internal Server Error',
