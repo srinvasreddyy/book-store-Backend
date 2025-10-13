@@ -6,7 +6,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import mongoose from "mongoose";
 import cache from "../../utils/cache.js";
 
-const createBook = async (bookData, user, file) => {
+const createBook = async (bookData, user, files) => {
     const {
         title, author, isbn, publisher, numberOfPages, category, format,
         language, shortDescription, fullDescription, tags, price, stock
@@ -41,9 +41,12 @@ const createBook = async (bookData, user, file) => {
         }
     }
     
-    const coverImageLocalPath = file?.path;
-    if (!coverImageLocalPath) {
-        throw new ApiError(400, "Cover image file is required.");
+    // Check if files array is present and not empty
+    if (!files || files.length === 0) {
+        throw new ApiError(400, "At least one cover image is required.");
+    }
+    if (files.length > 5) {
+        throw new ApiError(400, "You can upload a maximum of 5 images.");
     }
     // --- End Validation ---
 
@@ -61,7 +64,6 @@ const createBook = async (bookData, user, file) => {
 
     let tagIds = [];
     if (tags && tags.length > 0) {
-        // Ensure tags is an array
         const tagList = Array.isArray(tags) ? tags : [tags];
         const tagOperations = tagList.map(async (tagName) => {
             const name = tagName.trim().toLowerCase();
@@ -77,10 +79,17 @@ const createBook = async (bookData, user, file) => {
         tagIds = (await Promise.all(tagOperations)).filter(Boolean);
     }
 
-    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
-    if (!coverImage || !coverImage.url) {
-        throw new ApiError(500, "Failed to upload cover image. Please try again.");
-    }
+    // --- Upload multiple images to Cloudinary ---
+    const imageUploadPromises = files.map(file => uploadOnCloudinary(file.path));
+    const uploadResults = await Promise.all(imageUploadPromises);
+
+    const imageUrls = uploadResults.map(result => {
+        if (!result || !result.url) {
+            // In a real scenario, you might want to delete already uploaded images if one fails.
+            throw new ApiError(500, "Failed to upload one or more images. Please try again.");
+        }
+        return result.url;
+    });
 
     const book = await Book.create({
         title,
@@ -96,7 +105,7 @@ const createBook = async (bookData, user, file) => {
         tags: tagIds,
         price,
         stock,
-        coverImage: coverImage.url,
+        coverImages: imageUrls, // Save the array of URLs
         uploadedBy: user._id,
     });
 
@@ -137,8 +146,6 @@ const getAllBooks = async (queryParams) => {
         if (mongoose.isValidObjectId(category)) {
             matchStage.category = new mongoose.Types.ObjectId(category);
         } else {
-            // If invalid category ID is passed, return no results for that filter.
-            // This prevents a server crash.
             return { docs: [], totalDocs: 0, limit, page, totalPages: 1, nextPage: null, prevPage: null };
         }
     }
@@ -217,7 +224,6 @@ const updateBookDetails = async (bookId, bookData, user) => {
         throw new ApiError(400, "No fields provided to update.");
     }
     
-    // Prevent critical fields from being updated this way
     delete bookData.uploadedBy;
     delete bookData.isbn; 
 
@@ -236,8 +242,8 @@ const updateBookDetails = async (bookId, bookData, user) => {
         { new: true, runValidators: true }
     ).populate("tags").populate("category", "name");
 
-    cache.del("allBooks"); // Invalidate list cache
-    cache.del(bookId); // Invalidate specific book cache
+    cache.del("allBooks");
+    cache.del(bookId);
     return updatedBook;
 };
 

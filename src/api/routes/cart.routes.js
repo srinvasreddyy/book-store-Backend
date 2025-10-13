@@ -1,9 +1,9 @@
 import { Router } from "express";
 import {
-    getCart,
-    addItemToCart,
-    removeItemFromCart,
-    clearCart
+  getCart,
+  addItemToCart,
+  removeItemFromCart,
+  clearCart,
 } from "../controllers/cart.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 

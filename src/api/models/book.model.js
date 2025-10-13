@@ -79,9 +79,13 @@ const bookSchema = new Schema(
             min: 0,
             default: 0,
         },
-        coverImage: {
-            type: String, // URL from Cloudinary
+        coverImages: {
+            type: [String], // Array of URLs from Cloudinary
             required: true,
+            validate: [
+                (val) => val.length > 0 && val.length <= 5,
+                'A book must have between 1 and 5 cover images.'
+            ]
         },
         uploadedBy: {
             type: Schema.Types.ObjectId,

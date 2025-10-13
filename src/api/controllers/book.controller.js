@@ -3,7 +3,8 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import bookService from "../services/book.service.js";
 
 const createBook = asyncHandler(async (req, res) => {
-    const createdBook = await bookService.createBook(req.body, req.user, req.file);
+    // req.files will be an array of files, not req.file
+    const createdBook = await bookService.createBook(req.body, req.user, req.files);
     return res
         .status(201)
         .json(new ApiResponse(201, createdBook, "Book created successfully"));

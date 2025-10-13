@@ -1,11 +1,11 @@
 import { Router } from "express";
 import {
-    createCategory,
-    getAllCategories,
-    getSelectableCategories,
-    getAdminCategoriesWithBooks,
-    updateCategory,
-    deleteCategory,
+  createCategory,
+  getAllCategories,
+  getSelectableCategories,
+  getAdminCategoriesWithBooks,
+  updateCategory,
+  deleteCategory,
 } from "../controllers/category.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/rbac.middleware.js";

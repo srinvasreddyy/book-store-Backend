@@ -1,56 +1,57 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { rateLimit } from 'express-rate-limit';
-import helmet from 'helmet';
-import mongoSanitize from 'express-mongo-sanitize';
-import xss from 'xss-clean';
-import csurf from 'csurf';
-import { ApiError } from './utils/ApiError.js';
+import { rateLimit } from "express-rate-limit";
+import helmet from "helmet";
+import mongoSanitize from "express-mongo-sanitize";
+import xss from "xss-clean";
+import csurf from "csurf";
+import { ApiError } from "./utils/ApiError.js";
 import logger from "./utils/logger.js";
 
 const app = express();
 
-app.use(cors({
+app.use(
+  cors({
     origin: process.env.CORS_ORIGIN,
-    credentials: true
-}));
+    credentials: true,
+  }),
+);
 
 // The Razorpay webhook needs the raw body, so we place this before the global json parser
 import paymentRouter from "./api/routes/payment.routes.js";
 app.use("/api/v1/payments", paymentRouter);
-
 
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
 app.use(
-    helmet({
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'"],
-                scriptSrc: ["'self'", "'unsafe-inline'"],
-                styleSrc: ["'self'", "'unsafe-inline'"],
-                imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
-                connectSrc: ["'self'"],
-                fontSrc: ["'self'"],
-                objectSrc: ["'none'"],
-                mediaSrc: ["'self'"],
-                frameSrc: ["'none'"],
-            },
-        },
-        hsts: {
-            maxAge: 31536000,
-            includeSubDomains: true,
-            preload: true,
-        },
-        frameguard: {
-            action: 'deny',
-        },
-        xssFilter: true,
-        noSniff: true,
-    })
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: {
+      action: "deny",
+    },
+    xssFilter: true,
+    noSniff: true,
+  }),
 );
 app.use(mongoSanitize());
 app.use(xss());
@@ -58,19 +59,18 @@ app.use(xss());
 const csrfProtection = csurf({ cookie: true });
 app.use(csrfProtection);
 
-app.get('/api/v1/csrf-token', (req, res) => {
-    res.json({ csrfToken: req.csrfToken() });
+app.get("/api/v1/csrf-token", (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
 });
 
 const limiter = rateLimit({
-	windowMs: 15 * 60 * 1000,
-	limit: 100,
-	standardHeaders: 'draft-7',
-	legacyHeaders: false,
-    message: 'Too many requests from this IP, please try again after 15 minutes'
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: "Too many requests from this IP, please try again after 15 minutes",
 });
 app.use(limiter);
-
 
 // Routes Import
 import healthCheckRouter from "./api/routes/healthcheck.routes.js";
@@ -85,7 +85,6 @@ import orderRouter from "./api/routes/order.routes.js";
 import dashboardRouter from "./api/routes/dashboard.routes.js";
 import tagRouter from "./api/routes/tag.routes.js";
 import homepageRouter from "./api/routes/homepage.routes.js";
-
 
 // Routes Declaration
 app.use("/api/v1/healthcheck", healthCheckRouter);
@@ -103,30 +102,30 @@ app.use("/api/v1/homepage", homepageRouter);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-    if (err.code === 'EBADCSRFTOKEN') {
-        logger.error(err);
-        return res.status(403).json({
-            statusCode: 403,
-            message: 'Invalid CSRF token',
-            success: false,
-        });
-    }
-    if (err instanceof ApiError) {
-        logger.error(err);
-        return res.status(err.statusCode).json({
-            statusCode: err.statusCode,
-            message: err.message,
-            success: err.success,
-            errors: err.errors,
-        });
-    }
-
+  if (err.code === "EBADCSRFTOKEN") {
     logger.error(err);
-    return res.status(500).json({
-        statusCode: 500,
-        message: 'Internal Server Error',
-        success: false,
+    return res.status(403).json({
+      statusCode: 403,
+      message: "Invalid CSRF token",
+      success: false,
     });
+  }
+  if (err instanceof ApiError) {
+    logger.error(err);
+    return res.status(err.statusCode).json({
+      statusCode: err.statusCode,
+      message: err.message,
+      success: err.success,
+      errors: err.errors,
+    });
+  }
+
+  logger.error(err);
+  return res.status(500).json({
+    statusCode: 500,
+    message: "Internal Server Error",
+    success: false,
+  });
 });
 
 export { app };

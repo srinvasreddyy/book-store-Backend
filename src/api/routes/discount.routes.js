@@ -1,10 +1,10 @@
 import { Router } from "express";
 import {
-    createDiscount,
-    getMyDiscounts,
-    validateDiscount,
-    updateDiscount,
-    deleteDiscount
+  createDiscount,
+  getMyDiscounts,
+  validateDiscount,
+  updateDiscount,
+  deleteDiscount,
 } from "../controllers/discount.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/rbac.middleware.js";

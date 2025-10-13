@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { getDashboardStats, getAdminBookStats, getAdminSalesStats, getRecentOrders } from "../controllers/dashboard.controller.js";
+import {
+  getDashboardStats,
+  getAdminBookStats,
+  getAdminSalesStats,
+  getRecentOrders,
+} from "../controllers/dashboard.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/rbac.middleware.js";
 
