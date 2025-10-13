@@ -10,16 +10,18 @@ import logger from "./utils/logger.js";
 
 const app = express();
 
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN,
-    credentials: true,
-  }),
-);
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN === '*' ? '*' : process.env.CORS_ORIGIN?.split(','),
+  credentials: true,
+};
 
-// The Razorpay webhook needs the raw body, so we place this before the global json parser
+app.use(cors(corsOptions));
+
+// The Razorpay webhook needs the raw body. We move the payment router before the global json parser.
+// The raw body parsing is now handled directly in the payment.routes.js file itself.
 import paymentRouter from "./api/routes/payment.routes.js";
 app.use("/api/v1/payments", paymentRouter);
+
 
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));

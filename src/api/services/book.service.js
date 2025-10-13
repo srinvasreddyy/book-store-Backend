@@ -9,7 +9,8 @@ import cache from "../../utils/cache.js";
 const createBook = async (bookData, user, files) => {
     const {
         title, author, isbn, publisher, numberOfPages, category, format,
-        language, shortDescription, fullDescription, tags, price, stock
+        language, shortDescription, fullDescription, tags, price, stock,
+        isFeatured, isBestSeller
     } = bookData;
 
     // --- Comprehensive Input Validation ---
@@ -21,7 +22,7 @@ const createBook = async (bookData, user, files) => {
         }
     }
     
-    const allowedFormats = ['eBook', 'Hardcover', 'Paperback', 'Audiobook'];
+    const allowedFormats = ['Hardcover', 'Paperback'];
     if (!allowedFormats.includes(format)) {
         throw new ApiError(400, `Invalid format. Must be one of: ${allowedFormats.join(', ')}`);
     }
@@ -37,12 +38,12 @@ const createBook = async (bookData, user, files) => {
         }
     }
     
-    // Check if files array is present and not empty
-    if (!files || files.length === 0) {
+    const coverImageFiles = files?.coverImages;
+    if (!coverImageFiles || coverImageFiles.length === 0) {
         throw new ApiError(400, "At least one cover image is required.");
     }
-    if (files.length > 5) {
-        throw new ApiError(400, "You can upload a maximum of 5 images.");
+    if (coverImageFiles.length > 5) {
+        throw new ApiError(400, "You can upload a maximum of 5 cover images.");
     }
     // --- End Validation ---
 
@@ -83,17 +84,26 @@ const createBook = async (bookData, user, files) => {
         tagIds = (await Promise.all(tagOperations)).filter(Boolean);
     }
 
-    // --- Upload multiple images to Cloudinary ---
-    const imageUploadPromises = files.map(file => uploadOnCloudinary(file.path));
+    // --- Upload cover images ---
+    const imageUploadPromises = coverImageFiles.map(file => uploadOnCloudinary(file.path));
     const uploadResults = await Promise.all(imageUploadPromises);
-
     const imageUrls = uploadResults.map(result => {
         if (!result || !result.url) {
-            // In a real scenario, you might want to delete already uploaded images if one fails.
-            throw new ApiError(500, "Failed to upload one or more images. Please try again.");
+            throw new ApiError(500, "Failed to upload one or more cover images. Please try again.");
         }
         return result.url;
     });
+
+    // --- Handle optional PDF upload ---
+    let samplePdfUrl = null;
+    const samplePdfFile = files?.samplePdf?.[0];
+    if (samplePdfFile) {
+        const pdfUploadResult = await uploadOnCloudinary(samplePdfFile.path);
+        if (!pdfUploadResult || !pdfUploadResult.url) {
+            throw new ApiError(500, "Failed to upload the sample PDF. Please try again.");
+        }
+        samplePdfUrl = pdfUploadResult.url;
+    }
 
     const book = await Book.create({
         title,
@@ -109,8 +119,11 @@ const createBook = async (bookData, user, files) => {
         tags: tagIds,
         price,
         stock,
-        coverImages: imageUrls, // Save the array of URLs
+        coverImages: imageUrls,
+        samplePdfUrl,
         uploadedBy: user._id,
+        isFeatured: isFeatured || false,
+        isBestSeller: isBestSeller || false,
     });
 
     const createdBook = await Book.findById(book._id).populate("tags").populate("category");
@@ -238,6 +251,14 @@ const updateBookDetails = async (bookId, bookData, user) => {
 
     if (bookToUpdate.uploadedBy.toString() !== user._id.toString()) {
         throw new ApiError(403, "You do not have permission to edit this book.");
+    }
+    
+    // Explicitly handle boolean fields to prevent incorrect truthy/falsy values
+    if (bookData.isFeatured !== undefined) {
+        bookData.isFeatured = !!bookData.isFeatured;
+    }
+    if (bookData.isBestSeller !== undefined) {
+        bookData.isBestSeller = !!bookData.isBestSeller;
     }
 
     const updatedBook = await Book.findByIdAndUpdate(

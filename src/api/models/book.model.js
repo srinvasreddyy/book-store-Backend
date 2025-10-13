@@ -46,7 +46,7 @@ const bookSchema = new Schema(
         format: {
             type: String,
             required: true,
-            enum: ['eBook', 'Hardcover', 'Paperback', 'Audiobook'],
+            enum: ['Hardcover', 'Paperback'], // Restricted to physical formats
         },
         language: {
             type: String,
@@ -87,10 +87,22 @@ const bookSchema = new Schema(
                 'A book must have between 1 and 5 cover images.'
             ]
         },
+        samplePdfUrl: {
+            type: String, // URL for sample PDF from Cloudinary
+            default: null,
+        },
         uploadedBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
+        },
+        isFeatured: {
+            type: Boolean,
+            default: false,
+        },
+        isBestSeller: {
+            type: Boolean,
+            default: false,
         }
     },
     {

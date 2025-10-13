@@ -8,68 +8,55 @@ import mongoose from "mongoose";
 import logger from "../../utils/logger.js";
 
 const verifyRazorpayPayment = asyncHandler(async (req, res) => {
-  // --- Defensive Payload Validation ---
-  const paymentEntity = req.body?.payload?.payment?.entity;
-  if (!paymentEntity) {
-    throw new ApiError(
-      400,
-      "Malformed webhook payload. Payment entity is missing.",
-    );
-  }
-
-  const { order_id: razorpay_order_id, id: razorpay_payment_id } =
-    paymentEntity;
+  const razorpay_order_id = req.body?.payload?.payment?.entity?.order_id;
+  const razorpay_payment_id = req.body?.payload?.payment?.entity?.id;
   const razorpay_signature = req.headers["x-razorpay-signature"];
+  const rawBody = req.rawBody; // Assuming rawBody is attached by a middleware
 
-  if (
-    !razorpay_order_id ||
-    typeof razorpay_order_id !== "string" ||
-    razorpay_order_id.trim() === ""
-  ) {
-    throw new ApiError(
-      400,
-      "Razorpay Order ID is missing or invalid in webhook payload.",
-    );
+  logger.info({
+    message: "Razorpay webhook received.",
+    razorpay_order_id,
+    razorpay_payment_id,
+  });
+
+  // --- Defensive Payload and Header Validation ---
+  if (!rawBody) {
+    logger.error("Raw body is missing for signature verification.");
+    throw new ApiError(500, "Internal server error: Raw body not available.");
   }
-  if (
-    !razorpay_payment_id ||
-    typeof razorpay_payment_id !== "string" ||
-    razorpay_payment_id.trim() === ""
-  ) {
-    throw new ApiError(
-      400,
-      "Razorpay Payment ID is missing or invalid in webhook payload.",
-    );
+
+  if (!razorpay_order_id) {
+    throw new ApiError(400, "Razorpay Order ID is missing in webhook payload.");
   }
-  if (
-    !razorpay_signature ||
-    typeof razorpay_signature !== "string" ||
-    razorpay_signature.trim() === ""
-  ) {
-    throw new ApiError(
-      400,
-      "x-razorpay-signature header is missing or invalid.",
-    );
+  if (!razorpay_payment_id) {
+    throw new ApiError(400, "Razorpay Payment ID is missing in webhook payload.");
+  }
+  if (!razorpay_signature) {
+    throw new ApiError(400, "x-razorpay-signature header is missing.");
   }
   // --- End Validation ---
 
-  const body = JSON.stringify(req.body);
-
   const expectedSignature = crypto
     .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-    .update(body)
+    .update(rawBody)
     .digest("hex");
 
   if (expectedSignature !== razorpay_signature) {
-    logger.error(
-      `Signature mismatch for order ${razorpay_order_id}. Expected: ${expectedSignature}, Got: ${razorpay_signature}`,
-    );
-    await Order.findOneAndUpdate(
-      { razorpayOrderId: razorpay_order_id },
-      { paymentStatus: "FAILED", status: "FAILED" },
-    );
+    logger.error({
+      message: "Razorpay signature mismatch.",
+      razorpay_order_id,
+      expected: expectedSignature,
+      received: razorpay_signature,
+    });
+    // While the signature is invalid, we don't want to mark the order as failed yet,
+    // as it could be a spoofed request. We just reject the webhook.
     throw new ApiError(400, "Invalid signature. Payment verification failed.");
   }
+
+  logger.info({
+    message: "Razorpay signature verified successfully.",
+    razorpay_order_id,
+  });
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -79,18 +66,24 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
     }).session(session);
 
     if (!order) {
-      logger.error(
-        `Webhook for non-existent order received. Razorpay Order ID: ${razorpay_order_id}`,
-      );
-      throw new ApiError(404, "Order not found for this payment.");
+      logger.warn({
+        message: "Webhook for a non-existent order received.",
+        razorpay_order_id,
+      });
+      // If the order doesn't exist in our DB, it's not our concern.
+      // Acknowledge the webhook to prevent retries from Razorpay.
+      await session.abortTransaction();
+      return res.status(200).json({ status: "ok" });
     }
 
     // Idempotency check: if order is already processed, just return success.
     if (order.paymentStatus === "COMPLETED") {
+      logger.info({
+        message: "Duplicate webhook for an already completed order.",
+        orderId: order._id,
+        razorpay_order_id,
+      });
       await session.abortTransaction();
-      logger.info(
-        `Received duplicate webhook for already completed order ${order._id}`,
-      );
       return res.status(200).json({ status: "ok" });
     }
 
@@ -102,19 +95,13 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
 
     // Decrement stock for each item in the order
     for (const item of order.items) {
-      const book = await Book.findById(item.book).session(session);
-      if (!book || book.stock < item.quantity) {
-        throw new ApiError(
-          500,
-          `Stock inconsistency for book ${item.book} during order completion.`,
-        );
-      }
       await Book.findByIdAndUpdate(
         item.book,
         { $inc: { stock: -item.quantity } },
-        { session },
+        { session, runValidators: true },
       );
     }
+    logger.info({ message: "Stock decremented successfully.", orderId: order._id });
 
     // Clear the user's cart
     await Cart.findOneAndUpdate(
@@ -122,28 +109,50 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
       { $set: { items: [] } },
       { session },
     );
+    logger.info({ message: "User cart cleared successfully.", userId: order.user });
 
     await session.commitTransaction();
 
-    logger.info(
-      `Successfully verified and processed payment for Order ID: ${order._id}`,
-    );
+    logger.info({
+      message: "Payment successfully verified and processed.",
+      orderId: order._id,
+    });
     return res.status(200).json({ status: "ok" });
   } catch (error) {
     await session.abortTransaction();
-    logger.error("Payment verification transaction failed:", error);
+    logger.error({
+        message: "Payment verification transaction failed.",
+        error: error.message,
+        razorpay_order_id,
+        stack: error.stack,
+    });
 
-    // Attempt to mark the order as failed if something went wrong
+    // Best-effort attempt to mark the order as failed if something went wrong inside the transaction
     await Order.findOneAndUpdate(
       { razorpayOrderId: razorpay_order_id },
       { paymentStatus: "FAILED", status: "FAILED" },
     );
 
+    // We still throw an error to signal that the webhook processing failed.
     if (error instanceof ApiError) throw error;
-    throw new ApiError(500, "An error occurred during payment verification.");
+    throw new ApiError(500, "An internal error occurred during payment verification.");
   } finally {
     session.endSession();
   }
 });
 
-export { verifyRazorpayPayment };
+// We need to get the raw body for the signature verification, so we update app.js to attach it.
+// This is a special middleware that should run *only* for the webhook route.
+const getRawBody = (req, res, next) => {
+    let data = '';
+    req.on('data', chunk => {
+        data += chunk;
+    });
+    req.on('end', () => {
+        req.rawBody = data;
+        next();
+    });
+};
+
+
+export { verifyRazorpayPayment, getRawBody };

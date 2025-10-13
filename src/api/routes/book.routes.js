@@ -22,7 +22,15 @@ router.route("/admin/my-books").get(verifyJWT, verifyAdmin, getAdminBooks);
 
 router
     .route("/")
-    .post(verifyJWT, verifyAdmin, upload.array("coverImages", 5), createBook);
+    .post(
+        verifyJWT, 
+        verifyAdmin, 
+        upload.fields([
+            { name: 'coverImages', maxCount: 5 },
+            { name: 'samplePdf', maxCount: 1 }
+        ]), 
+        createBook
+    );
 
 router
     .route("/:bookId")

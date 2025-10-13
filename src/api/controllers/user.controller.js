@@ -9,7 +9,9 @@ import jwt from "jsonwebtoken";
 const isNullOrWhitespace = (value) => !value || value.trim() === "";
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const isValidPassword = (password) =>
-  /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/.test(password);
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(
+    password,
+  );
 
 // --- Token Generation ---
 
@@ -50,7 +52,7 @@ const registerUser = asyncHandler(async (req, res) => {
   if (!isValidPassword(password)) {
     throw new ApiError(
       400,
-      "Password must be at least 8 characters long and contain at least one letter and one number.",
+      "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.",
     );
   }
 
@@ -238,7 +240,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   if (!isValidPassword(newPassword)) {
     throw new ApiError(
       400,
-      "New password must be at least 8 characters long and contain at least one letter and one number.",
+      "New password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.",
     );
   }
   if (oldPassword === newPassword) {
