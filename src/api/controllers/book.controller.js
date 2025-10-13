@@ -4,6 +4,10 @@ import bookService from "../services/book.service.js";
 
 const createBook = asyncHandler(async (req, res) => {
     // req.files will now be an object with properties 'coverImages' and 'samplePdf'
+    console.log(process.env.CLOUDINARY_CLOUD_NAME);
+    console.log(process.env.CLOUDINARY_API_KEY);
+    console.log(process.env.CLOUDINARY_API_SECRET);
+    
     const createdBook = await bookService.createBook(req.body, req.user, req.files);
     return res
         .status(201)
