@@ -22,6 +22,10 @@ const categorySchema = new Schema(
       ref: "User",
       default: null,
     },
+    isDefault: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

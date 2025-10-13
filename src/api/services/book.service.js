@@ -20,10 +20,6 @@ const createBook = async (bookData, user, files) => {
             throw new ApiError(400, `${fieldName} is required.`);
         }
     }
-
-    if (!mongoose.isValidObjectId(category)) {
-        throw new ApiError(400, "Invalid Category ID format.");
-    }
     
     const allowedFormats = ['eBook', 'Hardcover', 'Paperback', 'Audiobook'];
     if (!allowedFormats.includes(format)) {
@@ -50,11 +46,19 @@ const createBook = async (bookData, user, files) => {
     }
     // --- End Validation ---
 
-    // Validate category ownership and existence
-    const categoryDoc = await Category.findById(category);
-    if (!categoryDoc) throw new ApiError(404, "The selected category does not exist.");
-    if (categoryDoc.owner && categoryDoc.owner.toString() !== user._id.toString()) {
-        throw new ApiError(403, "You do not have permission to use this category.");
+    let categoryDoc = await Category.findOne({
+      $or: [
+        { _id: mongoose.isValidObjectId(category) ? category : null },
+        { name: category, owner: user?._id },
+        { name: category, isDefault: true }
+      ],
+    });
+
+    if (!categoryDoc) {
+      categoryDoc = await Category.create({
+        name: category,
+        owner: user?._id
+      });
     }
 
     const existingBook = await Book.findOne({ isbn });
@@ -97,7 +101,7 @@ const createBook = async (bookData, user, files) => {
         isbn,
         publisher,
         numberOfPages,
-        category,
+        category: categoryDoc._id,
         format,
         language,
         shortDescription,
