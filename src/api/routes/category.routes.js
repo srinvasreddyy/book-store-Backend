@@ -1,7 +1,9 @@
 import { Router } from "express";
 import {
   createCategory,
+  getGlobalCategories,
   getAllCategories,
+  getTopCategories,
   getSelectableCategories,
   getAdminCategoriesWithBooks,
   updateCategory,
@@ -12,8 +14,10 @@ import { verifyAdmin } from "../middlewares/rbac.middleware.js";
 
 const router = Router();
 
-// Public route (shows only global categories)
-router.route("/").get(getAllCategories);
+// Public routes
+router.route("/").get(getGlobalCategories); // Existing route for global categories
+router.route("/all").get(getAllCategories); // New route for all categories
+router.route("/top").get(getTopCategories); // New route for top categories
 
 // Admin routes
 router.use(verifyJWT, verifyAdmin);

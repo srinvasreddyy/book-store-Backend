@@ -43,7 +43,7 @@ const createCategory = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, category, "Category created successfully."));
 });
 
-const getAllCategories = asyncHandler(async (req, res) => {
+const getGlobalCategories = asyncHandler(async (req, res) => {
   // This public route now only returns global categories
   const categories = await Category.find({ owner: null }).populate(
     "parentCategory",
@@ -60,6 +60,71 @@ const getAllCategories = asyncHandler(async (req, res) => {
       ),
     );
 });
+
+// New function for FEATURE-021
+const getAllCategories = asyncHandler(async (req, res) => {
+  // This public route returns all categories, global and admin-created
+  const categories = await Category.find({}).populate("parentCategory", "name");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        categories,
+        "All categories fetched successfully.",
+      ),
+    );
+});
+
+
+// New function for FEATURE-020
+const getTopCategories = asyncHandler(async (req, res) => {
+    const limit = parseInt(req.query.limit, 10) || 5;
+
+    if (limit <= 0) {
+        throw new ApiError(400, "Limit must be a positive number.");
+    }
+
+    const topCategories = await Book.aggregate([
+        {
+            $group: {
+                _id: "$category",
+                bookCount: { $sum: 1 },
+            },
+        },
+        {
+            $sort: { bookCount: -1 },
+        },
+        {
+            $limit: limit,
+        },
+        {
+            $lookup: {
+                from: "categories",
+                localField: "_id",
+                foreignField: "_id",
+                as: "categoryDetails",
+            },
+        },
+        {
+            $unwind: "$categoryDetails",
+        },
+        {
+            $project: {
+                _id: "$categoryDetails._id",
+                name: "$categoryDetails.name",
+                description: "$categoryDetails.description",
+                bookCount: 1,
+            },
+        },
+    ]);
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, topCategories, "Top categories fetched successfully."));
+});
+
 
 const getSelectableCategories = asyncHandler(async (req, res) => {
   // This admin route returns global categories + the admin's own categories
@@ -201,7 +266,9 @@ const deleteCategory = asyncHandler(async (req, res) => {
 
 export {
   createCategory,
+  getGlobalCategories,
   getAllCategories,
+  getTopCategories,
   getSelectableCategories,
   getAdminCategoriesWithBooks,
   updateCategory,
