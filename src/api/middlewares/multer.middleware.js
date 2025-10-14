@@ -1,3 +1,4 @@
+// src/api/middlewares/multer.middleware.js
 import multer from "multer";
 
 const storage = multer.diskStorage({
@@ -5,7 +6,8 @@ const storage = multer.diskStorage({
     cb(null, "./public/temp");
   },
   filename: function (req, file, cb) {
-    cb(null, file.originalname);
+    // Add a timestamp to make the filename unique
+    cb(null, `${Date.now()}-${file.originalname}`);
   },
 });
 

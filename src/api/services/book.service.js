@@ -10,8 +10,11 @@ const createBook = async (bookData, user, files) => {
     const {
         title, author, isbn, publisher, numberOfPages, category, format,
         language, shortDescription, fullDescription, tags, price, stock,
-        isFeatured, isBestSeller
     } = bookData;
+
+    const isFeatured = bookData.isFeatured === 'true' || bookData.isFeatured === true;
+    const isBestSeller = bookData.isBestSeller === 'true' || bookData.isBestSeller === true;
+
 
     // --- Comprehensive Input Validation ---
     const requiredFields = { title, author, isbn, publisher, category, format, language, shortDescription, fullDescription };
@@ -122,8 +125,8 @@ const createBook = async (bookData, user, files) => {
         coverImages: imageUrls,
         samplePdfUrl,
         uploadedBy: user._id,
-        isFeatured: isFeatured || false,
-        isBestSeller: isBestSeller || false,
+        isFeatured, // Use the converted boolean value
+        isBestSeller, // Use the converted boolean value
     });
 
     const createdBook = await Book.findById(book._id).populate("tags").populate("category");
