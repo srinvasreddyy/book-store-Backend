@@ -17,13 +17,16 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// The Razorpay webhook needs the raw body. We move the payment router before the global json parser.
-// The raw body parsing is now handled directly in the payment.routes.js file itself.
-import paymentRouter from "./api/routes/payment.routes.js";
-app.use("/api/v1/payments", paymentRouter);
+// We need to use express.json() with a verify function for the Razorpay webhook.
+// The raw body will be captured and attached to the request object.
+app.use(express.json({
+  limit: "16kb",
+  verify: (req, res, buf) => {
+    // Attach the raw body to the request for webhook verification
+    req.rawBody = buf;
+  }
+}));
 
-
-app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
@@ -79,6 +82,8 @@ import orderRouter from "./api/routes/order.routes.js";
 import dashboardRouter from "./api/routes/dashboard.routes.js";
 import tagRouter from "./api/routes/tag.routes.js";
 import homepageRouter from "./api/routes/homepage.routes.js";
+import paymentRouter from "./api/routes/payment.routes.js";
+
 
 // Routes Declaration
 app.use("/api/v1/healthcheck", healthCheckRouter);
@@ -93,6 +98,8 @@ app.use("/api/v1/orders", orderRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 app.use("/api/v1/tags", tagRouter);
 app.use("/api/v1/homepage", homepageRouter);
+app.use("/api/v1/payments", paymentRouter);
+
 
 // Global Error Handler
 app.use((err, req, res, next) => {
