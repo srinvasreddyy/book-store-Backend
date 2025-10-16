@@ -101,6 +101,40 @@ const removeCarouselImage = asyncHandler(async (req, res) => {
     );
 });
 
+const updateCarouselImage = asyncHandler(async (req, res) => {
+  const { itemId } = req.params;
+  const { title, subtitle, bookLink } = req.body;
+
+  if (!mongoose.isValidObjectId(itemId))
+    throw new ApiError(400, "Invalid item ID format.");
+  if (!title || title.trim() === "")
+    throw new ApiError(400, "A title is required for the carousel image.");
+  if (bookLink && !mongoose.isValidObjectId(bookLink))
+    throw new ApiError(400, "Invalid Book ID format for book link.");
+
+  const homepage = await Homepage.findOneAndUpdate(
+    { 
+      user: req.user._id,
+      "carouselImages._id": itemId 
+    },
+    { 
+      $set: { 
+        "carouselImages.$.title": title,
+        "carouselImages.$.subtitle": subtitle || "",
+        "carouselImages.$.bookLink": bookLink || null
+      } 
+    },
+    { new: true }
+  );
+
+  if (!homepage)
+    throw new ApiError(404, "Homepage or carousel image not found.");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, homepage, "Carousel image updated successfully."));
+});
+
 const addYoutubeVideo = asyncHandler(async (req, res) => {
   const { title, description, videoUrl } = req.body;
   const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
@@ -136,6 +170,41 @@ const removeYoutubeVideo = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(200, homepage, "YouTube video removed successfully."),
     );
+});
+
+const updateYoutubeVideo = asyncHandler(async (req, res) => {
+  const { itemId } = req.params;
+  const { title, description, videoUrl } = req.body;
+  const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
+
+  if (!mongoose.isValidObjectId(itemId))
+    throw new ApiError(400, "Invalid item ID format.");
+  if (!title || title.trim() === "")
+    throw new ApiError(400, "A title is required.");
+  if (!videoUrl || !youtubeRegex.test(videoUrl))
+    throw new ApiError(400, "A valid YouTube video URL is required.");
+
+  const homepage = await Homepage.findOneAndUpdate(
+    { 
+      user: req.user._id,
+      "youtubeVideos._id": itemId 
+    },
+    { 
+      $set: { 
+        "youtubeVideos.$.title": title,
+        "youtubeVideos.$.description": description || "",
+        "youtubeVideos.$.videoUrl": videoUrl
+      } 
+    },
+    { new: true }
+  );
+
+  if (!homepage)
+    throw new ApiError(404, "Homepage or YouTube video not found.");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, homepage, "YouTube video updated successfully."));
 });
 
 const addShortVideo = asyncHandler(async (req, res) => {
@@ -189,13 +258,47 @@ const removeShortVideo = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, homepage, "Short video removed successfully."));
 });
 
+const updateShortVideo = asyncHandler(async (req, res) => {
+  const { itemId } = req.params;
+  const { title, description } = req.body;
+
+  if (!mongoose.isValidObjectId(itemId))
+    throw new ApiError(400, "Invalid item ID format.");
+  if (!title || title.trim() === "")
+    throw new ApiError(400, "A title is required.");
+
+  const homepage = await Homepage.findOneAndUpdate(
+    { 
+      user: req.user._id,
+      "shortVideos._id": itemId 
+    },
+    { 
+      $set: { 
+        "shortVideos.$.title": title,
+        "shortVideos.$.description": description || ""
+      } 
+    },
+    { new: true }
+  );
+
+  if (!homepage)
+    throw new ApiError(404, "Homepage or short video not found.");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, homepage, "Short video updated successfully."));
+});
+
 export {
   getHomepageByAdminId as getHomepageByUsername, // aliasing for backward compatibility in exports if needed elsewhere
   getHomepageByAdminId,
   addCarouselImage,
   removeCarouselImage,
+  updateCarouselImage,
   addYoutubeVideo,
   removeYoutubeVideo,
+  updateYoutubeVideo,
   addShortVideo,
   removeShortVideo,
+  updateShortVideo,
 };

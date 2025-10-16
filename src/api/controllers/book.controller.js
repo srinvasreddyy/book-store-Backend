@@ -34,7 +34,7 @@ const getBookById = asyncHandler(async (req, res) => {
 });
 
 const updateBookDetails = asyncHandler(async (req, res) => {
-    const updatedBook = await bookService.updateBookDetails(req.params.bookId, req.body, req.user);
+    const updatedBook = await bookService.updateBookDetails(req.params.bookId, req.body, req.user, req.files);
     return res
         .status(200)
         .json(new ApiResponse(200, updatedBook, "Book details updated successfully"));

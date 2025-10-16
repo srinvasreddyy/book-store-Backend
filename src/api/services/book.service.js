@@ -235,12 +235,12 @@ const getBookById = async (bookId) => {
     return book;
 };
 
-const updateBookDetails = async (bookId, bookData, user) => {
+const updateBookDetails = async (bookId, bookData, user, files) => {
     if (!mongoose.isValidObjectId(bookId)) {
         throw new ApiError(400, "Invalid book ID format.");
     }
 
-    if (Object.keys(bookData).length === 0) {
+    if (Object.keys(bookData).length === 0 && (!files || Object.keys(files).length === 0)) {
         throw new ApiError(400, "No fields provided to update.");
     }
     
@@ -254,6 +254,27 @@ const updateBookDetails = async (bookId, bookData, user) => {
 
     if (bookToUpdate.uploadedBy.toString() !== user._id.toString()) {
         throw new ApiError(403, "You do not have permission to edit this book.");
+    }
+    
+    // Handle new cover images if provided
+    if (files && files.coverImages && files.coverImages.length > 0) {
+        const coverImageFiles = files.coverImages;
+        if (coverImageFiles.length > 5) {
+            throw new ApiError(400, "You can upload a maximum of 5 cover images.");
+        }
+
+        // Upload new images
+        const imageUploadPromises = coverImageFiles.map(file => uploadOnCloudinary(file.path));
+        const uploadResults = await Promise.all(imageUploadPromises);
+        const newImageUrls = uploadResults.map(result => {
+            if (!result || !result.url) {
+                throw new ApiError(500, "Failed to upload one or more cover images. Please try again.");
+            }
+            return result.url;
+        });
+
+        // Add new images to existing ones
+        bookData.coverImages = [...(bookToUpdate.coverImages || []), ...newImageUrls];
     }
     
     // Explicitly handle boolean fields to prevent incorrect truthy/falsy values

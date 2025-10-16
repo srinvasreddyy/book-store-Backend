@@ -34,7 +34,15 @@ router
 
 router
     .route("/:bookId")
-    .patch(verifyJWT, verifyAdmin, updateBookDetails)
+    .patch(
+        verifyJWT, 
+        verifyAdmin,
+        upload.fields([
+            { name: 'coverImages', maxCount: 5 },
+            { name: 'samplePdf', maxCount: 1 }
+        ]),
+        updateBookDetails
+    )
     .delete(verifyJWT, verifyAdmin, deleteBook);
 
 export default router;
