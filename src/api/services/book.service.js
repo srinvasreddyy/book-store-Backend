@@ -88,7 +88,7 @@ const createBook = async (bookData, user, files) => {
     }
 
     // --- Upload cover images ---
-    const imageUploadPromises = coverImageFiles.map(file => uploadOnCloudinary(file.path));
+    const imageUploadPromises = coverImageFiles.map(file => uploadOnCloudinary(file.buffer));
     const uploadResults = await Promise.all(imageUploadPromises);
     const imageUrls = uploadResults.map(result => {
         if (!result || !result.url) {
@@ -101,7 +101,7 @@ const createBook = async (bookData, user, files) => {
     let samplePdfUrl = null;
     const samplePdfFile = files?.samplePdf?.[0];
     if (samplePdfFile) {
-        const pdfUploadResult = await uploadOnCloudinary(samplePdfFile.path);
+        const pdfUploadResult = await uploadOnCloudinary(samplePdfFile.buffer);
         if (!pdfUploadResult || !pdfUploadResult.url) {
             throw new ApiError(500, "Failed to upload the sample PDF. Please try again.");
         }
@@ -264,7 +264,7 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
         }
 
         // Upload new images
-        const imageUploadPromises = coverImageFiles.map(file => uploadOnCloudinary(file.path));
+        const imageUploadPromises = coverImageFiles.map(file => uploadOnCloudinary(file.buffer));
         const uploadResults = await Promise.all(imageUploadPromises);
         const newImageUrls = uploadResults.map(result => {
             if (!result || !result.url) {

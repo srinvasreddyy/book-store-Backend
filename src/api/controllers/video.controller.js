@@ -17,8 +17,8 @@ const uploadVideo = asyncHandler(async (req, res) => {
   if (!bookId || !mongoose.isValidObjectId(bookId)) {
     throw new ApiError(400, "A valid book ID is required.");
   }
-  const videoFileLocalPath = req.file?.path;
-  if (!videoFileLocalPath) {
+  const videoBuffer = req.file?.buffer;
+  if (!videoBuffer) {
     throw new ApiError(400, "A video file must be uploaded.");
   }
   // --- End Validation ---
@@ -28,7 +28,7 @@ const uploadVideo = asyncHandler(async (req, res) => {
     throw new ApiError(404, "The specified book does not exist.");
   }
 
-  const videoFile = await uploadOnCloudinary(videoFileLocalPath);
+  const videoFile = await uploadOnCloudinary(videoBuffer, "video");
   if (!videoFile) {
     throw new ApiError(500, "Failed to upload video file to cloud storage.");
   }

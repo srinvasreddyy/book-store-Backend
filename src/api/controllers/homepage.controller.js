@@ -56,17 +56,17 @@ const getHomepageByAdminId = asyncHandler(async (req, res) => {
 
 const addCarouselImage = asyncHandler(async (req, res) => {
   const { title, subtitle, bookLink } = req.body;
-  const imageLocalPath = req.file?.path;
+  const imageBuffer = req.file?.buffer;
 
   // --- Validation ---
   if (!title || title.trim() === "")
     throw new ApiError(400, "A title is required for the carousel image.");
-  if (!imageLocalPath)
+  if (!imageBuffer)
     throw new ApiError(400, "An image file must be uploaded.");
   if (bookLink && !mongoose.isValidObjectId(bookLink))
     throw new ApiError(400, "Invalid Book ID format for book link.");
 
-  const image = await uploadOnCloudinary(imageLocalPath);
+  const image = await uploadOnCloudinary(imageBuffer, "image");
   if (!image?.url) throw new ApiError(500, "Failed to upload image.");
 
   const homepage = await findOrCreateHomepage(req.user._id);
@@ -209,15 +209,15 @@ const updateYoutubeVideo = asyncHandler(async (req, res) => {
 
 const addShortVideo = asyncHandler(async (req, res) => {
   const { title, description } = req.body;
-  const videoLocalPath = req.file?.path;
+  const videoBuffer = req.file?.buffer;
 
   // --- Validation ---
   if (!title || title.trim() === "")
     throw new ApiError(400, "A title is required.");
-  if (!videoLocalPath)
+  if (!videoBuffer)
     throw new ApiError(400, "A video file must be uploaded.");
 
-  const video = await uploadOnCloudinary(videoLocalPath);
+  const video = await uploadOnCloudinary(videoBuffer, "video");
   if (!video?.url) throw new ApiError(500, "Failed to upload video.");
 
   if (video.duration > 180) {
