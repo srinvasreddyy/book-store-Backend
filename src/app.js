@@ -13,6 +13,8 @@ const app = express();
 const allowedOrigins = [
   "https://bookstore-snowy-two.vercel.app",
   "https://admin-book-store-liard.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:5174",
   ...(process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",")
     : []),
