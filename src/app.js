@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
@@ -8,13 +7,6 @@ import { ApiError } from "./utils/ApiError.js";
 import logger from "./utils/logger.js";
 
 const app = express();
-
-// const corsOptions = {
-//   origin: process.env.CORS_ORIGIN === '*' ? '*' : process.env.CORS_ORIGIN?.split(','),
-//   credentials: true,
-// };
-
-// app.use(cors(corsOptions));
 
 // We need to use express.json() with a verify function for the Razorpay webhook.
 // The raw body will be captured and attached to the request object.
