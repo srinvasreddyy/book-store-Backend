@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
 import xss from "xss-clean";
@@ -59,15 +58,6 @@ app.use(
 );
 app.use(mongoSanitize());
 app.use(xss());
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: "Too many requests from this IP, please try again after 15 minutes",
-});
-app.use(limiter);
 
 // Routes Import
 import healthCheckRouter from "./api/routes/healthcheck.routes.js";

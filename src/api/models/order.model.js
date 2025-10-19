@@ -48,6 +48,10 @@ const orderSchema = new Schema(
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },
     idempotencyKey: { type: String, unique: true, sparse: true },
+
+    // --- Delivery Details ---
+    deliveryBoyName: { type: String },
+    deliveryBoyMobile: { type: String },
   },
   {
     timestamps: true,
