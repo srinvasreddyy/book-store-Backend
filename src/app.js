@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
@@ -8,19 +9,43 @@ import logger from "./utils/logger.js";
 
 const app = express();
 
-// We need to use express.json() with a verify function for the Razorpay webhook.
-// The raw body will be captured and attached to the request object.
-app.use(express.json({
-  limit: "16kb",
-  verify: (req, res, buf) => {
-    // Attach the raw body to the request for webhook verification
-    req.rawBody = buf;
-  }
-}));
+// ✅ CORS Configuration
+const allowedOrigins = [
+  "https://bookstore-snowy-two.vercel.app",
+  "https://admin-book-store-liard.vercel.app",
+  ...(process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",")
+    : []),
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || process.env.CORS_ORIGIN === "*") {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
+// ✅ Capture raw body for Razorpay webhook
+app.use(
+  express.json({
+    limit: "16kb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
+
+// ✅ Secure HTTP headers
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -41,17 +66,16 @@ app.use(
       includeSubDomains: true,
       preload: true,
     },
-    frameguard: {
-      action: "deny",
-    },
+    frameguard: { action: "deny" },
     xssFilter: true,
     noSniff: true,
-  }),
+  })
 );
+
 app.use(mongoSanitize());
 app.use(xss());
 
-// Routes Import
+// ✅ Routes Import
 import healthCheckRouter from "./api/routes/healthcheck.routes.js";
 import userRouter from "./api/routes/user.routes.js";
 import categoryRouter from "./api/routes/category.routes.js";
@@ -66,8 +90,7 @@ import tagRouter from "./api/routes/tag.routes.js";
 import homepageRouter from "./api/routes/homepage.routes.js";
 import paymentRouter from "./api/routes/payment.routes.js";
 
-
-// Routes Declaration
+// ✅ Routes Declaration
 app.use("/api/v1/healthcheck", healthCheckRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/categories", categoryRouter);
@@ -82,8 +105,7 @@ app.use("/api/v1/tags", tagRouter);
 app.use("/api/v1/homepage", homepageRouter);
 app.use("/api/v1/payments", paymentRouter);
 
-
-// Global Error Handler
+// ✅ Global Error Handler
 app.use((err, req, res, next) => {
   if (err instanceof ApiError) {
     logger.error(err);
