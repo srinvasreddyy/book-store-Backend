@@ -7,6 +7,19 @@ import crypto from "crypto";
 import mongoose from "mongoose";
 import logger from "../../utils/logger.js";
 
+// Get Razorpay key for frontend
+const getRazorpayKey = asyncHandler(async (req, res) => {
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+  if (!razorpayKeyId) {
+    throw new ApiError(500, "Razorpay key not configured");
+  }
+
+  return res.status(200).json({
+    success: true,
+    key: razorpayKeyId
+  });
+});
+
 // Feature Flag Check
 const isRobustPaymentVerificationEnabled = process.env.ENABLE_ROBUST_PAYMENT_VERIFICATION === 'true';
 
@@ -166,4 +179,4 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
   }
 });
 
-export { verifyRazorpayPayment };
+export { verifyRazorpayPayment, getRazorpayKey };

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getHomepageByAdminId,
+  getPublicHomepage,
   addCarouselImage,
   removeCarouselImage,
   updateCarouselImage,
@@ -19,6 +20,7 @@ const router = Router();
 
 // --- Public Route ---
 router.route("/:adminId").get(getHomepageByAdminId);
+router.route("/").get(getPublicHomepage);
 
 // --- Admin-Only Routes ---
 router.use(verifyJWT, verifyAdmin);

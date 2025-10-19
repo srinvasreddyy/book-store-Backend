@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   initiateOrder,
+  getUserOrders,
   getAllOrders,
   getOrderById,
   updateOrder,
@@ -14,6 +15,8 @@ const router = Router();
 
 // User routes
 router.use(verifyJWT);
+// Get orders for the currently authenticated user
+router.route("/").get(getUserOrders);
 router.route("/initiate").post(initiateOrder);
 
 // Admin routes

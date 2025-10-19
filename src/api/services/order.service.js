@@ -13,7 +13,7 @@ const instance = new Razorpay({
 });
 
 const initiateOrder = async (orderData, user, headers) => {
-  const { couponCode, paymentMethod } = orderData;
+  const { couponCode, paymentMethod, shippingAddress } = orderData;
   const userId = user._id;
   const idempotencyKey = headers["idempotency-key"];
 
@@ -24,6 +24,17 @@ const initiateOrder = async (orderData, user, headers) => {
       400,
       `Payment method is required and must be one of: ${allowedPaymentMethods.join(", ")}.`,
     );
+  }
+
+  // Validate shipping address
+  if (!shippingAddress || typeof shippingAddress !== 'object') {
+    throw new ApiError(400, "Shipping address is required.");
+  }
+  const requiredAddressFields = ['fullName', 'address', 'city', 'state', 'zip', 'phone'];
+  for (const field of requiredAddressFields) {
+    if (!shippingAddress[field] || shippingAddress[field].trim() === '') {
+      throw new ApiError(400, `Shipping address ${field} is required.`);
+    }
   }
 
   if (idempotencyKey && idempotencyKey.trim() === "") {
@@ -115,6 +126,7 @@ const initiateOrder = async (orderData, user, headers) => {
       paymentMethod,
       paymentStatus: "PENDING",
       idempotencyKey,
+      shippingAddress,
     });
 
     // --- Handle Payment Method ---

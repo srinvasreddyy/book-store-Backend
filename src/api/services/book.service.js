@@ -48,6 +48,7 @@ const createBook = async (bookData, user, files) => {
     if (coverImageFiles.length > 5) {
         throw new ApiError(400, "You can upload a maximum of 5 cover images.");
     }
+    console.log('Cover image files:', coverImageFiles.map(f => ({ fieldname: f.fieldname, originalname: f.originalname, size: f.size, buffer: !!f.buffer, isBuffer: Buffer.isBuffer(f.buffer) })));
     // --- End Validation ---
 
     let categoryDoc = await Category.findOne({

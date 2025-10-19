@@ -28,6 +28,64 @@ const initiateOrder = asyncHandler(async (req, res) => {
     );
 });
 
+// User: Get orders for the authenticated user (paginated)
+const getUserOrders = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, status, search, dateFrom, dateTo, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+
+  const matchConditions = { user: req.user._id };
+
+  if (status && status !== 'all') {
+    matchConditions.status = status.toUpperCase();
+  }
+
+  if (dateFrom || dateTo) {
+    matchConditions.createdAt = {};
+    if (dateFrom) matchConditions.createdAt.$gte = new Date(dateFrom);
+    if (dateTo) matchConditions.createdAt.$lte = new Date(dateTo);
+  }
+
+  const orders = await Order.find(matchConditions)
+    .populate('items.book', 'title coverImages author price')
+    .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit));
+
+  // Transform data for frontend
+  const transformedOrders = orders.map(order => ({
+    _id: order._id,
+    id: order._id.toString(),
+    books: order.items.map(item => ({
+      title: item.book?.title || 'Unknown Book',
+      images: item.book?.coverImages || [],
+      quantity: item.quantity,
+      price: item.priceAtPurchase
+    })),
+    date: order.createdAt.toISOString().split('T')[0],
+    total: order.finalAmount,
+    status: order.status.toLowerCase(),
+    shippingAddress: order.shippingAddress,
+    deliveryBoyName: order.deliveryBoyName,
+    deliveryBoyMobile: order.deliveryBoyMobile,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt
+  }));
+
+  const totalOrders = await Order.countDocuments({ user: req.user._id });
+
+  res.status(200).json(
+    new ApiResponse(200, {
+      orders: transformedOrders,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalOrders / limit),
+        totalOrders,
+        hasNext: page * limit < totalOrders,
+        hasPrev: page > 1
+      }
+    }, "User orders fetched successfully")
+  );
+});
+
 // Admin: Get all orders with pagination and filters
 const getAllOrders = asyncHandler(async (req, res) => {
   const {
@@ -79,6 +137,7 @@ const getAllOrders = asyncHandler(async (req, res) => {
     id: order._id.toString(),
     customer: order.user?.name || 'Unknown',
     email: order.user?.email || '',
+    shippingAddress: order.shippingAddress,
     books: order.items.map(item => ({
       title: item.book?.title || 'Unknown Book',
       quantity: item.quantity,
@@ -201,6 +260,7 @@ const getOrderStats = asyncHandler(async (req, res) => {
 
 export {
   initiateOrder,
+  getUserOrders,
   getAllOrders,
   getOrderById,
   updateOrder,

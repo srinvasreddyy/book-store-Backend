@@ -52,21 +52,54 @@ const getHomepageByAdminId = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, homepage, "Homepage fetched successfully."));
 });
 
+// --- PUBLIC CONTROLLER FOR CLIENT ---
+const getPublicHomepage = asyncHandler(async (req, res) => {
+  // Return any configured homepage content from any admin so public site
+  // can display content even if the "first" admin hasn't configured theirs.
+  // Look for any Homepage document that has at least one item in any of the
+  // content arrays. This aggregates public content across admins implicitly
+  // by returning the first non-empty homepage.
+  const homepage = await Homepage.findOne({
+    $or: [
+      { 'carouselImages.0': { $exists: true } },
+      { 'youtubeVideos.0': { $exists: true } },
+      { 'shortVideos.0': { $exists: true } },
+    ],
+  }).populate('carouselImages.bookLink', 'title author');
+
+  if (!homepage) {
+    // No configured homepage content found across admins
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          carouselImages: [],
+          youtubeVideos: [],
+          shortVideos: [],
+        },
+        'Homepage not configured yet.',
+      ),
+    );
+  }
+
+  return res.status(200).json(new ApiResponse(200, homepage, 'Homepage fetched successfully.'));
+});
+
 // --- ADMIN-ONLY CONTROLLERS ---
 
 const addCarouselImage = asyncHandler(async (req, res) => {
   const { title, subtitle, bookLink } = req.body;
-  const imageBuffer = req.file?.buffer;
+  const imageLocalPath = req.file?.buffer;
 
   // --- Validation ---
   if (!title || title.trim() === "")
     throw new ApiError(400, "A title is required for the carousel image.");
-  if (!imageBuffer)
+  if (!imageLocalPath)
     throw new ApiError(400, "An image file must be uploaded.");
   if (bookLink && !mongoose.isValidObjectId(bookLink))
     throw new ApiError(400, "Invalid Book ID format for book link.");
 
-  const image = await uploadOnCloudinary(imageBuffer, "image");
+  const image = await uploadOnCloudinary(imageLocalPath);
   if (!image?.url) throw new ApiError(500, "Failed to upload image.");
 
   const homepage = await findOrCreateHomepage(req.user._id);
@@ -209,15 +242,15 @@ const updateYoutubeVideo = asyncHandler(async (req, res) => {
 
 const addShortVideo = asyncHandler(async (req, res) => {
   const { title, description } = req.body;
-  const videoBuffer = req.file?.buffer;
+  const videoLocalPath = req.file?.buffer;
 
   // --- Validation ---
   if (!title || title.trim() === "")
     throw new ApiError(400, "A title is required.");
-  if (!videoBuffer)
+  if (!videoLocalPath)
     throw new ApiError(400, "A video file must be uploaded.");
 
-  const video = await uploadOnCloudinary(videoBuffer, "video");
+  const video = await uploadOnCloudinary(videoLocalPath);
   if (!video?.url) throw new ApiError(500, "Failed to upload video.");
 
   if (video.duration > 180) {
@@ -292,6 +325,7 @@ const updateShortVideo = asyncHandler(async (req, res) => {
 export {
   getHomepageByAdminId as getHomepageByUsername, // aliasing for backward compatibility in exports if needed elsewhere
   getHomepageByAdminId,
+  getPublicHomepage,
   addCarouselImage,
   removeCarouselImage,
   updateCarouselImage,

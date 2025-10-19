@@ -1,5 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import os from "os";
+import path from "path";
 import logger from "./logger.js";
 
 // --- Cloudinary Configuration ---
@@ -29,13 +31,12 @@ try {
 }
 
 /**
- * Uploads a file to Cloudinary and deletes the local copy upon success.
+ * Uploads a file to Cloudinary. Supports both local file paths and buffers.
  *
- * @param {string|Buffer} file - The local path to the file or a Buffer containing the file data.
- * @param {string} [resourceType="auto"] - The resource type for Cloudinary upload.
+ * @param {string|Buffer} file - The local path to the file or a buffer to upload.
  * @returns {Promise<object|null>} - The Cloudinary response object on success, or null on failure.
  */
-const uploadOnCloudinary = async (file, resourceType = "auto") => {
+const uploadOnCloudinary = async (file) => {
   if (!file) {
     logger.error(
       "Cloudinary upload failed: No file provided.",
@@ -43,34 +44,43 @@ const uploadOnCloudinary = async (file, resourceType = "auto") => {
     return null;
   }
 
-  try {
-    let uploadOptions = { resource_type: resourceType };
+  const isBuffer = Buffer.isBuffer(file);
+  const isPath = typeof file === 'string';
 
-    if (Buffer.isBuffer(file)) {
-      // If file is a buffer, upload directly
-      uploadOptions = {
-        ...uploadOptions,
-        buffer: file,
-      };
-    } else {
-      // If file is a path, check if it exists
-      if (!fs.existsSync(file)) {
-        logger.error(
-          `Cloudinary upload failed: File does not exist at path: ${file}`,
-        );
+  if (!isBuffer && !isPath) {
+    logger.error("Cloudinary upload failed: File must be a buffer or a string path.");
+    return null;
+  }
+
+  if (isPath && !fs.existsSync(file)) {
+    logger.error(
+      `Cloudinary upload failed: File does not exist at path: ${file}`,
+    );
+    return null;
+  }
+
+  try {
+    let response;
+    if (isBuffer) {
+      // Upload buffer directly
+      if (!Buffer.isBuffer(file) || file.length === 0) {
+        logger.error("Invalid buffer provided for upload:", { isBuffer: Buffer.isBuffer(file), length: file.length });
         return null;
       }
-      uploadOptions = {
-        ...uploadOptions,
-        public_id: undefined, // Let Cloudinary generate the public_id
-      };
-    }
-
-    // Upload the file to Cloudinary
-    const response = await cloudinary.uploader.upload(file, uploadOptions);
-
-    // If it was a file path, delete the local file after successful upload
-    if (typeof file === 'string' && fs.existsSync(file)) {
+      logger.info(`Uploading buffer of size: ${file.length}`);
+      // Temporarily save buffer to file for testing
+      const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.random()}.tmp`);
+      fs.writeFileSync(tempPath, file);
+      response = await cloudinary.uploader.upload(tempPath, {
+        resource_type: "auto",
+      });
+      fs.unlinkSync(tempPath);
+    } else {
+      // Upload from file path
+      response = await cloudinary.uploader.upload(file, {
+        resource_type: "auto",
+      });
+      // File has been uploaded successfully, now remove the local file.
       fs.unlinkSync(file);
     }
 
@@ -78,13 +88,23 @@ const uploadOnCloudinary = async (file, resourceType = "auto") => {
     return response;
   } catch (error) {
     // An error occurred during the upload process.
-    // The local file should NOT be deleted, to allow for potential retries.
     logger.error("--- CLOUDINARY UPLOAD FAILED ---");
+    if (isPath) {
+      logger.error(
+        `Failed to upload file: ${file}. The local file has not been deleted.`,
+      );
+    } else {
+      logger.error("Failed to upload buffer.");
+    }
     logger.error(
-      `Failed to upload file. The local file has not been deleted.`,
+      "This could be due to incorrect credentials, network issues, or an invalid file.",
     );
-    logger.error("This could be due to incorrect credentials, network issues, or an invalid file.");
     logger.error("Cloudinary Error Response:", error.message || error);
+    logger.error("Full error object:", error);
+    if (error && typeof error === 'object') {
+      logger.error("Error keys:", Object.keys(error));
+      logger.error("Error stack:", error.stack);
+    }
     logger.error("---------------------------------");
 
     return null;
