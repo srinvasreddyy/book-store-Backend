@@ -5,14 +5,16 @@ import {
   validateDiscount,
   updateDiscount,
   deleteDiscount,
+  getAvailableDiscounts,
 } from "../controllers/discount.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/rbac.middleware.js";
 
 const router = Router();
 
-// Public route for coupon validation (can be used by logged-in or guest users)
-router.route("/validate").post(verifyJWT, validateDiscount);
+// Public routes (no authentication required)
+router.route("/available").get(getAvailableDiscounts);
+router.route("/validate").post(validateDiscount);
 
 // Admin routes
 router.use(verifyJWT, verifyAdmin);

@@ -4,6 +4,9 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Discount } from "../models/discount.model.js";
 import mongoose from "mongoose";
 
+// ----------------------------------------------------
+// Create Discount
+// ----------------------------------------------------
 const createDiscount = asyncHandler(async (req, res) => {
   const {
     couponCode,
@@ -28,7 +31,7 @@ const createDiscount = asyncHandler(async (req, res) => {
   if (!type || !allowedTypes.includes(type)) {
     throw new ApiError(
       400,
-      `Discount type must be one of: ${allowedTypes.join(", ")}.`,
+      `Discount type must be one of: ${allowedTypes.join(", ")}.`
     );
   }
 
@@ -36,7 +39,7 @@ const createDiscount = asyncHandler(async (req, res) => {
     if (value === undefined || isNaN(Number(value)) || Number(value) <= 0) {
       throw new ApiError(
         400,
-        "A positive numeric value is required for this discount type.",
+        "A positive numeric value is required for this discount type."
       );
     }
   }
@@ -57,15 +60,15 @@ const createDiscount = asyncHandler(async (req, res) => {
   }
 
   const discount = await Discount.create({
-    couponCode,
+    couponCode: couponCode.trim().toUpperCase(),
     description,
     type,
-    value: type === "FREE_DELIVERY" ? 0 : value,
+    value: type === "FREE_DELIVERY" ? 0 : Number(value),
     minCartValue: minCartValue || 0,
-    maxUses,
-    maxUsesPerUser,
-    startDate,
-    endDate,
+    maxUses: Number(maxUses),
+    maxUsesPerUser: Number(maxUsesPerUser),
+    startDate: startDate || new Date(),
+    endDate: endDate || null,
     owner: adminId,
   });
 
@@ -74,6 +77,9 @@ const createDiscount = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, discount, "Discount created successfully."));
 });
 
+// ----------------------------------------------------
+// Get Discounts Created by Current Admin
+// ----------------------------------------------------
 const getMyDiscounts = asyncHandler(async (req, res) => {
   const discounts = await Discount.find({ owner: req.user._id }).sort({
     createdAt: -1,
@@ -81,13 +87,16 @@ const getMyDiscounts = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(
-      new ApiResponse(200, discounts, "Your discounts fetched successfully."),
+      new ApiResponse(200, discounts, "Your discounts fetched successfully.")
     );
 });
 
+// ----------------------------------------------------
+// Validate Discount Coupon
+// ----------------------------------------------------
 const validateDiscount = asyncHandler(async (req, res) => {
   const { couponCode, cartSubtotal } = req.body;
-  const userId = req.user?._id;
+  const userId = req.user?._id; // Optional for guest users
   const now = new Date();
 
   // --- Input Validation ---
@@ -104,7 +113,7 @@ const validateDiscount = asyncHandler(async (req, res) => {
   // --- End Validation ---
 
   const discount = await Discount.findOne({
-    couponCode: couponCode.toUpperCase(),
+    couponCode: couponCode.trim().toUpperCase(),
     isActive: true,
   });
 
@@ -114,7 +123,7 @@ const validateDiscount = asyncHandler(async (req, res) => {
   if (cartSubtotal < discount.minCartValue)
     throw new ApiError(
       400,
-      `A minimum cart value of ${discount.minCartValue} is required to use this coupon.`,
+      `A minimum cart value of ${discount.minCartValue} is required to use this coupon.`
     );
 
   if (discount.startDate && discount.startDate > now)
@@ -122,14 +131,15 @@ const validateDiscount = asyncHandler(async (req, res) => {
   if (discount.endDate && discount.endDate < now)
     throw new ApiError(400, "This coupon has expired.");
 
+  // Only check user usage limits if user is authenticated
   if (userId) {
     const userUsage = discount.usedBy.find(
-      (u) => u.user.toString() === userId.toString(),
+      (u) => u.user.toString() === userId.toString()
     );
     if (userUsage && userUsage.count >= discount.maxUsesPerUser) {
       throw new ApiError(
         403,
-        "You have already used this coupon the maximum number of times allowed.",
+        "You have already used this coupon the maximum number of times allowed."
       );
     }
   }
@@ -139,6 +149,9 @@ const validateDiscount = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, discount, "Coupon is valid."));
 });
 
+// ----------------------------------------------------
+// Update Discount
+// ----------------------------------------------------
 const updateDiscount = asyncHandler(async (req, res) => {
   const { discountId } = req.params;
 
@@ -154,13 +167,13 @@ const updateDiscount = asyncHandler(async (req, res) => {
   const discount = await Discount.findOneAndUpdate(
     { _id: discountId, owner: req.user._id },
     { $set: req.body },
-    { new: true, runValidators: true },
+    { new: true, runValidators: true }
   );
 
   if (!discount) {
     throw new ApiError(
       404,
-      "Discount not found or you don't have permission to edit it.",
+      "Discount not found or you don't have permission to edit it."
     );
   }
 
@@ -169,23 +182,25 @@ const updateDiscount = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, discount, "Discount updated successfully."));
 });
 
+// ----------------------------------------------------
+// Delete Discount
+// ----------------------------------------------------
 const deleteDiscount = asyncHandler(async (req, res) => {
   const { discountId } = req.params;
 
-  // --- Input Validation ---
   if (!mongoose.isValidObjectId(discountId)) {
     throw new ApiError(400, "Invalid discount ID format.");
   }
-  // --- End Validation ---
 
-  const discount = await Discount.findOneAndDelete({
+  const deleted = await Discount.findOneAndDelete({
     _id: discountId,
     owner: req.user._id,
   });
-  if (!discount) {
+
+  if (!deleted) {
     throw new ApiError(
       404,
-      "Discount not found or you don't have permission to delete it.",
+      "Discount not found or you don't have permission to delete it."
     );
   }
 
@@ -194,10 +209,41 @@ const deleteDiscount = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Discount deleted successfully."));
 });
 
+// ----------------------------------------------------
+// Get All Active & Available Discounts
+// ----------------------------------------------------
+const getAvailableDiscounts = asyncHandler(async (req, res) => {
+  const now = new Date();
+
+  const discounts = await Discount.find({
+    isActive: true,
+    $and: [
+      {
+        $or: [{ startDate: { $exists: false } }, { startDate: { $lte: now } }],
+      },
+      {
+        $or: [{ endDate: { $exists: false } }, { endDate: { $gte: now } }],
+      },
+    ],
+  })
+    .select("couponCode description type value minCartValue")
+    .sort({ createdAt: -1 });
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, discounts, "Available discounts fetched successfully.")
+    );
+});
+
+// ----------------------------------------------------
+// Export All Controllers
+// ----------------------------------------------------
 export {
   createDiscount,
   getMyDiscounts,
   validateDiscount,
   updateDiscount,
   deleteDiscount,
+  getAvailableDiscounts,
 };
