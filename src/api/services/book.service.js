@@ -145,7 +145,7 @@ const getAllBooks = async (queryParams) => {
         return cache.get(cacheKey);
     }
 
-    const { page = 1, limit = 10, category, search, sortBy, sortOrder = 'asc', tags } = queryParams;
+    const { page = 1, limit = 10, category, search, sortBy, sortOrder = 'asc', tags, isBestSeller } = queryParams;
 
     const options = {
         page: parseInt(page, 10),
@@ -169,6 +169,12 @@ const getAllBooks = async (queryParams) => {
         } else {
             return { docs: [], totalDocs: 0, limit, page, totalPages: 1, nextPage: null, prevPage: null };
         }
+    }
+    
+    // Support filtering books that are marked as best sellers
+    if (typeof isBestSeller !== 'undefined') {
+        // Accept 'true'/'false' strings or boolean values
+        matchStage.isBestSeller = (isBestSeller === 'true' || isBestSeller === true);
     }
     
     if (Object.keys(matchStage).length > 0) {
