@@ -71,22 +71,59 @@ const createBook = async (bookData, user, files) => {
         throw new ApiError(409, "A book with this ISBN already exists.");
     }
 
-    let tagIds = [];
-    if (tags && tags.length > 0) {
-        const tagList = Array.isArray(tags) ? tags : [tags];
-        const tagOperations = tagList.map(async (tagName) => {
-            const name = tagName.trim().toLowerCase();
-            if (name) {
-                const tag = await Tag.findOneAndUpdate(
-                    { name },
-                    { $setOnInsert: { name } },
-                    { upsert: true, new: true }
-                );
-                return tag._id;
+    // --- Normalize tag inputs ---
+    // The admin UI may send tags in several shapes: as 'tags' (could be names or ids),
+    // 'tagNames' (one or many fields with names), or 'tagIds' (one or many ids).
+    // Collect all provided IDs and names, create any new tags for names and produce final tagIds array.
+    let providedTagIds = [];
+    let providedTagNames = [];
+
+    // Helper to ensure value is array
+    const toArray = (v) => (Array.isArray(v) ? v : v !== undefined && v !== null ? [v] : []);
+
+    // If the client provided explicit tagIds
+    if (bookData.tagIds) {
+        providedTagIds = toArray(bookData.tagIds).map(String).filter(Boolean);
+    }
+
+    // If the client provided tagNames explicitly (one or many fields named 'tagNames')
+    if (bookData.tagNames) {
+        providedTagNames = toArray(bookData.tagNames).map(t => String(t).trim().toLowerCase()).filter(Boolean);
+    }
+
+    // The legacy/primary 'tags' field may contain either ids or names depending on the client.
+    if (tags) {
+        const tagList = toArray(tags).map(t => String(t).trim()).filter(Boolean);
+        tagList.forEach((t) => {
+            if (mongoose.isValidObjectId(t)) {
+                providedTagIds.push(t);
+            } else {
+                providedTagNames.push(t.toLowerCase());
             }
         });
-        tagIds = (await Promise.all(tagOperations)).filter(Boolean);
     }
+
+    // De-duplicate
+    providedTagIds = Array.from(new Set(providedTagIds));
+    providedTagNames = Array.from(new Set(providedTagNames));
+
+    // Create or lookup tags for provided names and get their ids
+    let generatedTagIds = [];
+    if (providedTagNames.length > 0) {
+        const tagOperations = providedTagNames.map(async (tagName) => {
+            const tag = await Tag.findOneAndUpdate(
+                { name: tagName },
+                { $setOnInsert: { name: tagName } },
+                { upsert: true, new: true }
+            );
+            return tag._id;
+        });
+        generatedTagIds = (await Promise.all(tagOperations)).filter(Boolean).map(id => id.toString());
+    }
+
+    // Final tag ids array used for the book
+    let tagIds = [...providedTagIds, ...generatedTagIds];
+    tagIds = Array.from(new Set(tagIds));
 
     // --- Upload cover images ---
     const imageUploadPromises = coverImageFiles.map(file => uploadOnCloudinary(file.buffer));
@@ -120,7 +157,7 @@ const createBook = async (bookData, user, files) => {
         language,
         shortDescription,
         fullDescription,
-        tags: tagIds,
+    tags: tagIds,
         price,
         stock,
         coverImages: imageUrls,
@@ -284,13 +321,67 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
         bookData.coverImages = [...(bookToUpdate.coverImages || []), ...newImageUrls];
     }
     
+    // --- Normalize tag inputs on update (accept tags, tagNames, tagIds) ---
+    const toArray = (v) => (Array.isArray(v) ? v : v !== undefined && v !== null ? [v] : []);
+    const providedTagIds = [];
+    const providedTagNames = [];
+
+    if (bookData.tagIds) {
+        toArray(bookData.tagIds).forEach(t => { if (mongoose.isValidObjectId(String(t))) providedTagIds.push(String(t)); });
+    }
+    if (bookData.tagNames) {
+        toArray(bookData.tagNames).forEach(t => { const s = String(t).trim().toLowerCase(); if (s) providedTagNames.push(s); });
+    }
+    if (bookData.tags) {
+        toArray(bookData.tags).forEach(t => {
+            const s = String(t).trim();
+            if (mongoose.isValidObjectId(s)) providedTagIds.push(s);
+            else if (s) providedTagNames.push(s.toLowerCase());
+        });
+    }
+
+    // Create/lookup tag ids for provided names
+    if (providedTagNames.length > 0) {
+        const uniqueNames = Array.from(new Set(providedTagNames));
+        const tagOps = uniqueNames.map(async (name) => {
+            const tag = await Tag.findOneAndUpdate(
+                { name },
+                { $setOnInsert: { name } },
+                { upsert: true, new: true }
+            );
+            return tag._id.toString();
+        });
+        const generated = (await Promise.all(tagOps)).filter(Boolean);
+        bookData.tags = Array.from(new Set([...(bookData.tags || []), ...providedTagIds, ...generated]));
+    } else if (providedTagIds.length > 0) {
+        // If only ids provided, set tags to those ids
+        bookData.tags = Array.from(new Set([...(bookData.tags || []), ...providedTagIds]));
+    }
+
     // Explicitly handle boolean fields to prevent incorrect truthy/falsy values
     if (bookData.isFeatured !== undefined) {
-        bookData.isFeatured = !!bookData.isFeatured;
+        // Accept 'true'/'false' strings, '1'/'0', numbers, and booleans
+        if (typeof bookData.isFeatured === 'string') {
+            bookData.isFeatured = ['true', '1', 'yes'].includes(bookData.isFeatured.toLowerCase());
+        } else {
+            bookData.isFeatured = !!bookData.isFeatured;
+        }
     }
     if (bookData.isBestSeller !== undefined) {
-        bookData.isBestSeller = !!bookData.isBestSeller;
+        if (typeof bookData.isBestSeller === 'string') {
+            bookData.isBestSeller = ['true', '1', 'yes'].includes(bookData.isBestSeller.toLowerCase());
+        } else {
+            bookData.isBestSeller = !!bookData.isBestSeller;
+        }
     }
+
+    // Parse numeric fields if present to ensure validation during update
+    ['numberOfPages', 'price', 'stock'].forEach(field => {
+        if (bookData[field] !== undefined && bookData[field] !== null && bookData[field] !== '') {
+            const n = Number(bookData[field]);
+            if (!isNaN(n)) bookData[field] = n;
+        }
+    });
 
     const updatedBook = await Book.findByIdAndUpdate(
         bookId,
