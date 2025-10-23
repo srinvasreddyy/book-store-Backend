@@ -15,6 +15,8 @@ const allowedOrigins = [
   "https://admin-book-store-liard.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174",
+  "https://indianbookshouse.in",
+  "https://admin.indianbookshouse.in",
   ...(process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",")
     : []),
