@@ -19,14 +19,7 @@ const bookSchema = new Schema(
             type: String,
             required: true,
             unique: true,
-            trim: true,
-            validate: {
-                validator: function (v) {
-                    // ISBN-10 or ISBN-13
-                    return /^(?=(?:\D*\d){10}(?:(?:\D*\d){3})?$)[\d-]+$/.test(v);
-                },
-                message: props => `${props.value} is not a valid ISBN!`
-            },
+            trim: true
         },
         publisher: {
             type: String,
