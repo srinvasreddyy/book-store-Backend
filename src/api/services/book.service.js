@@ -51,20 +51,22 @@ const createBook = async (bookData, user, files) => {
     console.log('Cover image files:', coverImageFiles.map(f => ({ fieldname: f.fieldname, originalname: f.originalname, size: f.size, buffer: !!f.buffer, isBuffer: Buffer.isBuffer(f.buffer) })));
     // --- End Validation ---
 
-    let categoryDoc = await Category.findOne({
-      $or: [
-        { _id: mongoose.isValidObjectId(category) ? category : null },
-        { name: category, owner: user?._id },
-        { name: category, isDefault: true }
-      ],
+    // --- FEATURE-020: Hardened Category Validation ---
+    // The 'category' field must now be a valid ObjectId.
+    if (!mongoose.isValidObjectId(category)) {
+        throw new ApiError(400, "A valid category ID is required. Creating categories by name is no longer supported.");
+    }
+    
+    // Check if the category exists and if the admin is allowed to use it (either global or their own)
+    const categoryDoc = await Category.findOne({
+      _id: category,
+      $or: [{ owner: null }, { owner: user._id }]
     });
 
     if (!categoryDoc) {
-      categoryDoc = await Category.create({
-        name: category,
-        owner: user?._id
-      });
+      throw new ApiError(404, "The selected category does not exist or you do not have permission to use it.");
     }
+    // --- End FEATURE-020 ---
 
     const existingBook = await Book.findOne({ isbn });
     if (existingBook) {
@@ -157,7 +159,7 @@ const createBook = async (bookData, user, files) => {
         language,
         shortDescription,
         fullDescription,
-    tags: tagIds,
+        tags: tagIds,
         price,
         stock,
         coverImages: imageUrls,
@@ -202,8 +204,24 @@ const getAllBooks = async (queryParams) => {
 
     if (category) {
         if (mongoose.isValidObjectId(category)) {
-            matchStage.category = new mongoose.Types.ObjectId(category);
+            // --- FEATURE-020: Search by parent category ---
+            // Find the category and all its descendants
+            const categoryDoc = await Category.findById(category).lean();
+            if (categoryDoc) {
+                const categoriesToSearch = [categoryDoc._id];
+                
+                // Find all immediate children of the specified category
+                const childCategories = await Category.find({ parentCategory: categoryDoc._id }).select('_id').lean();
+                categoriesToSearch.push(...childCategories.map(c => c._id));
+                
+                matchStage.category = { $in: categoriesToSearch };
+            } else {
+               // Category ID is valid but not found
+               return { docs: [], totalDocs: 0, limit, page, totalPages: 1, nextPage: null, prevPage: null };
+            }
+            // --- End FEATURE-020 ---
         } else {
+            // Invalid Category ID format
             return { docs: [], totalDocs: 0, limit, page, totalPages: 1, nextPage: null, prevPage: null };
         }
     }
@@ -268,14 +286,27 @@ const getBookById = async (bookId) => {
     if (!mongoose.isValidObjectId(bookId)) {
         throw new ApiError(400, "Invalid book ID format.");
     }
-    if (cache.has(bookId)) {
-        return cache.get(bookId);
+    const cacheKey = `book_${bookId}`;
+    if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
     }
-    const book = await Book.findById(bookId).populate("tags").populate("category", "name");
+    
+    // --- FEATURE-020: Populate category and its parent ---
+    const book = await Book.findById(bookId)
+      .populate("tags")
+      .populate({
+          path: "category",
+          select: "name parentCategory",
+          populate: {
+              path: "parentCategory",
+              select: "name"
+          }
+      });
+      
     if (!book) {
         throw new ApiError(404, "Book not found.");
     }
-    cache.set(bookId, book);
+    cache.set(cacheKey, book);
     return book;
 };
 
@@ -288,6 +319,7 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
         throw new ApiError(400, "No fields provided to update.");
     }
     
+    // Prevent critical fields from being updated
     delete bookData.uploadedBy;
     delete bookData.isbn; 
 
@@ -299,6 +331,24 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
     if (bookToUpdate.uploadedBy.toString() !== user._id.toString()) {
         throw new ApiError(403, "You do not have permission to edit this book.");
     }
+    
+    // --- FEATURE-020: Hardened Category Validation on Update ---
+    if (bookData.category) {
+      if (!mongoose.isValidObjectId(bookData.category)) {
+          throw new ApiError(400, "A valid category ID is required.");
+      }
+      
+      const categoryDoc = await Category.findOne({
+        _id: bookData.category,
+        $or: [{ owner: null }, { owner: user._id }]
+      });
+  
+      if (!categoryDoc) {
+        throw new ApiError(404, "The selected category does not exist or you do not have permission to use it.");
+      }
+      // If valid, the bookData.category field is already set and will be saved
+    }
+    // --- End FEATURE-020 ---
     
     // Handle new cover images if provided
     if (files && files.coverImages && files.coverImages.length > 0) {
@@ -325,14 +375,18 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
     const toArray = (v) => (Array.isArray(v) ? v : v !== undefined && v !== null ? [v] : []);
     const providedTagIds = [];
     const providedTagNames = [];
+    let tagsBeingSet = false;
 
     if (bookData.tagIds) {
+        tagsBeingSet = true;
         toArray(bookData.tagIds).forEach(t => { if (mongoose.isValidObjectId(String(t))) providedTagIds.push(String(t)); });
     }
     if (bookData.tagNames) {
+        tagsBeingSet = true;
         toArray(bookData.tagNames).forEach(t => { const s = String(t).trim().toLowerCase(); if (s) providedTagNames.push(s); });
     }
     if (bookData.tags) {
+        tagsBeingSet = true;
         toArray(bookData.tags).forEach(t => {
             const s = String(t).trim();
             if (mongoose.isValidObjectId(s)) providedTagIds.push(s);
@@ -340,23 +394,26 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
         });
     }
 
-    // Create/lookup tag ids for provided names
-    if (providedTagNames.length > 0) {
-        const uniqueNames = Array.from(new Set(providedTagNames));
-        const tagOps = uniqueNames.map(async (name) => {
-            const tag = await Tag.findOneAndUpdate(
-                { name },
-                { $setOnInsert: { name } },
-                { upsert: true, new: true }
-            );
-            return tag._id.toString();
-        });
-        const generated = (await Promise.all(tagOps)).filter(Boolean);
-        bookData.tags = Array.from(new Set([...(bookData.tags || []), ...providedTagIds, ...generated]));
-    } else if (providedTagIds.length > 0) {
-        // If only ids provided, set tags to those ids
-        bookData.tags = Array.from(new Set([...(bookData.tags || []), ...providedTagIds]));
+    if (tagsBeingSet) {
+        // Create/lookup tag ids for provided names
+        if (providedTagNames.length > 0) {
+            const uniqueNames = Array.from(new Set(providedTagNames));
+            const tagOps = uniqueNames.map(async (name) => {
+                const tag = await Tag.findOneAndUpdate(
+                    { name },
+                    { $setOnInsert: { name } },
+                    { upsert: true, new: true }
+                );
+                return tag._id.toString();
+            });
+            const generated = (await Promise.all(tagOps)).filter(Boolean);
+            bookData.tags = Array.from(new Set([...providedTagIds, ...generated]));
+        } else {
+            // If only ids provided, set tags to those ids
+            bookData.tags = Array.from(new Set(providedTagIds));
+        }
     }
+    // --- End Tag Logic ---
 
     // Explicitly handle boolean fields to prevent incorrect truthy/falsy values
     if (bookData.isFeatured !== undefined) {
@@ -387,10 +444,10 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
         bookId,
         { $set: bookData },
         { new: true, runValidators: true }
-    ).populate("tags").populate("category", "name");
+    ).populate("tags").populate("category", "name parentCategory");
 
     cache.del("allBooks");
-    cache.del(bookId);
+    cache.del(`book_${bookId}`);
     return updatedBook;
 };
 
@@ -411,7 +468,7 @@ const deleteBook = async (bookId, user) => {
     await Book.findByIdAndDelete(bookId);
 
     cache.del("allBooks");
-    cache.del(bookId);
+    cache.del(`book_${bookId}`);
 };
 
 export default {
