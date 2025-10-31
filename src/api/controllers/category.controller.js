@@ -3,8 +3,12 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Category } from "../models/category.model.js";
 import { Book } from "../models/book.model.js";
-import { uploadOnCloudinary } from "../../utils/cloudinary.js"; // Import Cloudinary uploader
+import {
+  uploadOnCloudinary,
+  deleteFromCloudinary,
+} from "../../utils/cloudinary.js"; // Import Cloudinary helpers
 import mongoose from "mongoose";
+import logger from "../../utils/logger.js"; // Import logger
 
 // --- Feature Flag Check ---
 // Per user request, this feature defaults to TRUE.
@@ -325,6 +329,9 @@ const updateCategory = asyncHandler(async (req, res) => {
   }
 
   // --- Handle File Upload ---
+  const oldImageUrl = category.backgroundImage;
+  let newImageUrl = null;
+
   if (req.file) {
     const image = await uploadOnCloudinary(req.file.buffer);
     if (!image?.url) {
@@ -333,11 +340,22 @@ const updateCategory = asyncHandler(async (req, res) => {
         "Failed to upload background image. Category not updated.",
       );
     }
-    // TODO: Delete old image from Cloudinary if it exists
-    category.backgroundImage = image.url;
+    newImageUrl = image.url;
+    category.backgroundImage = newImageUrl;
   }
 
   const updatedCategory = await category.save({ validateBeforeSave: true });
+
+  // --- Clean up old image from Cloudinary ---
+  // We do this *after* successfully saving the new one
+  if (newImageUrl && oldImageUrl) {
+    // Fire-and-forget deletion of the old image
+    deleteFromCloudinary(oldImageUrl).catch((err) =>
+      logger.warn(
+        `Failed to delete old Cloudinary image: ${oldImageUrl}. Error: ${err.message}`,
+      ),
+    );
+  }
 
   return res
     .status(200)
@@ -356,7 +374,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
   }
   // --- End Validation ---
 
-  // --- FEATURE-020: Check for sub-categories ---
+  // --- Check for dependencies before deleting ---
   const childCategoryCount = await Category.countDocuments({
     parentCategory: categoryId,
   });
@@ -366,7 +384,6 @@ const deleteCategory = asyncHandler(async (req, res) => {
       `Cannot delete category. It has ${childCategoryCount} sub-categor(y)ies. Please delete or re-assign them first.`,
     );
   }
-  // --- End FEATURE-020 ---
 
   const bookCount = await Book.countDocuments({
     category: categoryId,
@@ -379,8 +396,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
     );
   }
 
-  // TODO: Delete backgroundImage from Cloudinary before deleting the document
-
+  // --- Find and Delete from DB ---
   const result = await Category.findOneAndDelete({
     _id: categoryId,
     owner: adminId, // Can only delete their own categories
@@ -390,6 +406,14 @@ const deleteCategory = asyncHandler(async (req, res) => {
     throw new ApiError(
       404,
       "Category not found or you do not have permission to delete it (e.g., global categories cannot be deleted).",
+    );
+  }
+
+  if (result.backgroundImage) {
+    deleteFromCloudinary(result.backgroundImage).catch((err) =>
+      logger.warn(
+        `Failed to delete Cloudinary image for deleted category ${categoryId}: ${result.backgroundImage}. Error: ${err.message}`,
+      ),
     );
   }
 
