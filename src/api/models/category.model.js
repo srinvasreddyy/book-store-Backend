@@ -11,6 +11,10 @@ const categorySchema = new Schema(
       type: String,
       trim: true,
     },
+    backgroundImage: {
+      type: String, // Cloudinary URL
+      default: null,
+    },
     parentCategory: {
       type: Schema.Types.ObjectId,
       ref: "Category",

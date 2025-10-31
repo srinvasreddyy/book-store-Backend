@@ -3,6 +3,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Category } from "../models/category.model.js";
 import { Book } from "../models/book.model.js";
+import { uploadOnCloudinary } from "../../utils/cloudinary.js"; // Import Cloudinary uploader
 import mongoose from "mongoose";
 
 // --- Feature Flag Check ---
@@ -41,6 +42,7 @@ const buildCategoryTree = (categories, parentId = null) => {
       _id: child._id,
       name: child.name,
       description: child.description,
+      backgroundImage: child.backgroundImage, // Added new field
       owner: child.owner,
       parentCategory: child.parentCategory,
       isDefault: child.isDefault,
@@ -65,6 +67,20 @@ const createCategory = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid parent category ID format.");
   }
   // --- End Validation ---
+
+  // --- Handle File Upload ---
+  let imageUrl = null;
+  if (req.file) {
+    const image = await uploadOnCloudinary(req.file.buffer);
+    if (!image?.url) {
+      throw new ApiError(
+        500,
+        "Failed to upload background image. Category not created.",
+      );
+    }
+    imageUrl = image.url;
+  }
+  // --- End File Upload ---
 
   const existingCategory = await Category.findOne({ name, owner: adminId });
   if (existingCategory) {
@@ -91,6 +107,7 @@ const createCategory = asyncHandler(async (req, res) => {
   const category = await Category.create({
     name,
     description,
+    backgroundImage: imageUrl, // Save the URL
     parentCategory: parentCategory || null,
     owner: adminId,
   });
@@ -171,6 +188,7 @@ const getTopCategories = asyncHandler(async (req, res) => {
         _id: "$categoryDetails._id",
         name: "$categoryDetails.name",
         description: "$categoryDetails.description",
+        backgroundImage: "$categoryDetails.backgroundImage", // Added new field
         bookCount: 1,
       },
     },
@@ -245,53 +263,20 @@ const getAdminCategoriesWithBooks = asyncHandler(async (req, res) => {
 });
 
 const updateCategory = asyncHandler(async (req, res) => {
+  // --- This controller is refactored for robustness (read-modify-save) ---
   const { categoryId } = req.params;
   const { name, description, parentCategory } = req.body;
   const adminId = req.user._id;
 
-  // --- Input Validation ---
+  // --- Validation ---
   if (!mongoose.isValidObjectId(categoryId)) {
     throw new ApiError(400, "Invalid category ID format.");
   }
-  if (!name || name.trim() === "") {
-    throw new ApiError(400, "Category name is required.");
-  }
-  if (parentCategory && !mongoose.isValidObjectId(parentCategory)) {
-    throw new ApiError(400, "Invalid parent category ID format.");
-  }
-  if (parentCategory && parentCategory === categoryId) {
-    throw new ApiError(400, "A category cannot be its own parent.");
-  }
-  // --- End Validation ---
 
-  if (parentCategory) {
-    const parentExists = await Category.findById(parentCategory);
-    if (!parentExists) {
-      throw new ApiError(404, "The specified parent category does not exist.");
-    }
-    // Check if the new parent is one of the admin's own or a global one
-    if (
-      parentExists.owner !== null &&
-      parentExists.owner.toString() !== adminId.toString()
-    ) {
-      throw new ApiError(
-        403,
-        "You can only nest under your own categories or global categories.",
-      );
-    }
-  }
-
-  const category = await Category.findOneAndUpdate(
-    { _id: categoryId, owner: adminId }, // Can only update their own categories
-    {
-      $set: {
-        name,
-        description,
-        parentCategory: parentCategory || null,
-      },
-    },
-    { new: true, runValidators: true },
-  );
+  const category = await Category.findOne({
+    _id: categoryId,
+    owner: adminId, // Can only update their own categories
+  });
 
   if (!category) {
     throw new ApiError(
@@ -300,9 +285,65 @@ const updateCategory = asyncHandler(async (req, res) => {
     );
   }
 
+  // --- Handle Text/Data Updates ---
+  if (name !== undefined) {
+    if (name.trim() === "")
+      throw new ApiError(400, "Category name cannot be empty.");
+    category.name = name;
+  }
+
+  if (description !== undefined) {
+    category.description = description;
+  }
+
+  if (parentCategory !== undefined) {
+    if (parentCategory === null || parentCategory === "null") {
+      category.parentCategory = null;
+    } else {
+      if (!mongoose.isValidObjectId(parentCategory)) {
+        throw new ApiError(400, "Invalid parent category ID format.");
+      }
+      if (parentCategory === categoryId) {
+        throw new ApiError(400, "A category cannot be its own parent.");
+      }
+
+      const parentExists = await Category.findById(parentCategory);
+      if (!parentExists) {
+        throw new ApiError(404, "The specified parent category does not exist.");
+      }
+      if (
+        parentExists.owner !== null &&
+        parentExists.owner.toString() !== adminId.toString()
+      ) {
+        throw new ApiError(
+          403,
+          "You can only nest under your own categories or global categories.",
+        );
+      }
+      category.parentCategory = parentCategory;
+    }
+  }
+
+  // --- Handle File Upload ---
+  if (req.file) {
+    const image = await uploadOnCloudinary(req.file.buffer);
+    if (!image?.url) {
+      throw new ApiError(
+        500,
+        "Failed to upload background image. Category not updated.",
+      );
+    }
+    // TODO: Delete old image from Cloudinary if it exists
+    category.backgroundImage = image.url;
+  }
+
+  const updatedCategory = await category.save({ validateBeforeSave: true });
+
   return res
     .status(200)
-    .json(new ApiResponse(200, category, "Category updated successfully."));
+    .json(
+      new ApiResponse(200, updatedCategory, "Category updated successfully."),
+    );
 });
 
 const deleteCategory = asyncHandler(async (req, res) => {
@@ -337,6 +378,8 @@ const deleteCategory = asyncHandler(async (req, res) => {
       `Cannot delete category. It is currently used by ${bookCount} of your book(s).`,
     );
   }
+
+  // TODO: Delete backgroundImage from Cloudinary before deleting the document
 
   const result = await Category.findOneAndDelete({
     _id: categoryId,
