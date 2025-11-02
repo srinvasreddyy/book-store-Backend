@@ -3,6 +3,8 @@ import { ApiError } from "../../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import { sendEmail, getOTPEmailTemplate } from "../../utils/mailer.js";
 
 // --- Validation Helpers ---
 
@@ -319,6 +321,163 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Account details updated successfully."));
 });
 
+// --- NEW: Password Reset Controllers ---
+
+/**
+ * @route POST /api/v1/users/forgot-password
+ * @desc Send a password reset OTP to the user's email
+ * @access Public
+ */
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!isValidEmail(email)) {
+    throw new ApiError(400, "Please provide a valid email address.");
+  }
+
+  const user = await User.findOne({
+    email: email.toLowerCase(),
+    role: "CUSTOMER", // Only allow for customers
+  });
+
+  // Security: Always return a success-like message to prevent user enumeration
+  if (!user) {
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          null,
+          "If an account with this email exists, a password reset OTP has been sent.",
+        ),
+      );
+  }
+
+  // Generate a 6-digit OTP
+  const otp = crypto.randomInt(100000, 1000000).toString();
+
+  // Set OTP and 10-minute expiry
+  user.passwordResetOTP = otp;
+  user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  await user.save({ validateBeforeSave: false });
+
+  try {
+    // Send the email
+    const emailSubject = "Your Password Reset OTP (Valid for 10 min)";
+    const emailText = `Your password reset OTP is: ${otp}. It will expire in 10 minutes.`;
+    const emailHtml = getOTPEmailTemplate(otp);
+
+    await sendEmail(user.email, emailSubject, emailText, emailHtml);
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          null,
+          "If an account with this email exists, a password reset OTP has been sent.",
+        ),
+      );
+  } catch (error) {
+    // Clear the token if the email failed to send, so the user can try again
+    user.passwordResetOTP = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    throw new ApiError(
+      500,
+      "Failed to send password reset email. Please try again later.",
+    );
+  }
+});
+
+/**
+ * @route POST /api/v1/users/verify-otp
+ * @desc Verify the OTP sent to the user's email
+ * @access Public
+ */
+const verifyPasswordOTP = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!isValidEmail(email)) {
+    throw new ApiError(400, "A valid email is required.");
+  }
+  if (isNullOrWhitespace(otp)) {
+    throw new ApiError(400, "OTP is required.");
+  }
+
+  const user = await User.findOne({
+    email: email.toLowerCase(),
+    passwordResetOTP: otp,
+    passwordResetExpires: { $gt: Date.now() }, // Check if not expired
+  });
+
+  if (!user) {
+    throw new ApiError(400, "Invalid or expired OTP. Please try again.");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { email, otp }, "OTP verified successfully."));
+});
+
+/**
+ * @route POST /api/v1/users/reset-password
+ * @desc Reset the user's password after successful OTP verification
+ * @access Public
+ */
+const resetPassword = asyncHandler(async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  // --- Input Validation ---
+  if (!isValidEmail(email)) {
+    throw new ApiError(400, "A valid email is required.");
+  }
+  if (isNullOrWhitespace(otp)) {
+    throw new ApiError(400, "OTP is required.");
+  }
+  if (!isValidPassword(newPassword)) {
+    throw new ApiError(
+      400,
+      "New password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.",
+    );
+  }
+  // --- End Validation ---
+
+  // Find user by email, OTP, and check expiry
+  const user = await User.findOne({
+    email: email.toLowerCase(),
+    passwordResetOTP: otp,
+    passwordResetExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    throw new ApiError(400, "Invalid or expired OTP. Please request a new one.");
+  }
+
+  // Check if new password is the same as the old one
+  const isSamePassword = await user.isPasswordCorrect(newPassword);
+  if (isSamePassword) {
+    throw new ApiError(
+      400,
+      "New password must be different from your current password.",
+    );
+  }
+
+  // Update password
+  user.password = newPassword;
+
+  // Invalidate the OTP
+  user.passwordResetOTP = undefined;
+  user.passwordResetExpires = undefined;
+
+  await user.save(); // The 'pre-save' hook will hash the password
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password has been reset successfully."));
+});
+
 export {
   registerUser,
   loginUser,
@@ -327,4 +486,7 @@ export {
   changeCurrentPassword,
   getCurrentUser,
   updateAccountDetails,
+  forgotPassword,
+  verifyPasswordOTP,
+  resetPassword,
 };

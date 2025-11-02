@@ -32,6 +32,12 @@ const userSchema = new Schema(
     refreshToken: {
       type: String,
     },
+    passwordResetOTP: {
+      type: String,
+    },
+    passwordResetExpires: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
