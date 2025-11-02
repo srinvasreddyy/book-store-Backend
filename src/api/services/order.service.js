@@ -151,6 +151,8 @@ const initiateOrder = async (orderData, user, headers) => {
       return { order };
     } else {
       // For all online methods, create a Razorpay order
+      // NOTE: Order is saved with PENDING status but stock is NOT decremented
+      // Stock will only be decremented when payment webhook confirms success
       const options = {
         amount: Math.round(finalAmount * 100), // Amount in paise
         currency: "INR",
@@ -166,6 +168,7 @@ const initiateOrder = async (orderData, user, headers) => {
       }
 
       order.razorpayOrderId = razorpayOrder.id;
+      order.status = "PENDING"; // Order is pending until payment confirmation
       await order.save({ session });
       await session.commitTransaction();
 
@@ -179,6 +182,41 @@ const initiateOrder = async (orderData, user, headers) => {
   }
 };
 
+// Cleanup abandoned orders (orders that were created but payment was never completed)
+const cleanupAbandonedOrders = async () => {
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+  
+  const result = await Order.deleteMany({
+    paymentMethod: { $in: ["RAZORPAY", "UPI", "CARD"] },
+    paymentStatus: "PENDING",
+    status: "PENDING",
+    createdAt: { $lt: thirtyMinutesAgo }
+  });
+
+  return result.deletedCount;
+};
+
+// Mark order as failed (called when payment explicitly fails)
+const markOrderAsFailed = async (razorpayOrderId) => {
+  const order = await Order.findOne({ razorpayOrderId });
+  
+  if (!order) {
+    throw new ApiError(404, "Order not found");
+  }
+
+  if (order.paymentStatus === "COMPLETED") {
+    throw new ApiError(400, "Cannot mark completed order as failed");
+  }
+
+  order.status = "FAILED";
+  order.paymentStatus = "FAILED";
+  await order.save();
+
+  return order;
+};
+
 export default {
   initiateOrder,
+  cleanupAbandonedOrders,
+  markOrderAsFailed,
 };

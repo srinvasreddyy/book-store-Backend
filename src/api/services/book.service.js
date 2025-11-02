@@ -17,7 +17,7 @@ const createBook = async (bookData, user, files) => {
 
 
     // --- Comprehensive Input Validation ---
-    const requiredFields = { title, author, isbn, publisher, category, format, language, shortDescription, fullDescription };
+    const requiredFields = { title, author, publisher, category, format, language, shortDescription, fullDescription };
     for (const [field, value] of Object.entries(requiredFields)) {
         if (!value || String(value).trim() === "") {
             const fieldName = field.charAt(0).toUpperCase() + field.slice(1);
@@ -68,9 +68,12 @@ const createBook = async (bookData, user, files) => {
     }
     // --- End FEATURE-020 ---
 
-    const existingBook = await Book.findOne({ isbn });
-    if (existingBook) {
-        throw new ApiError(409, "A book with this ISBN already exists.");
+    // Check for duplicate ISBN only if ISBN is provided
+    if (isbn && isbn.trim() !== "") {
+        const existingBook = await Book.findOne({ isbn });
+        if (existingBook) {
+            throw new ApiError(409, "A book with this ISBN already exists.");
+        }
     }
 
     // --- Normalize tag inputs ---

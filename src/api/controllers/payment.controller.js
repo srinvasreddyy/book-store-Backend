@@ -1,11 +1,13 @@
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Order } from "../models/order.model.js";
 import { Cart } from "../models/cart.model.js";
 import { Book } from "../models/book.model.js";
 import crypto from "crypto";
 import mongoose from "mongoose";
 import logger from "../../utils/logger.js";
+import orderService from "../services/order.service.js";
 
 // Get Razorpay key for frontend
 const getRazorpayKey = asyncHandler(async (req, res) => {
@@ -18,6 +20,41 @@ const getRazorpayKey = asyncHandler(async (req, res) => {
     success: true,
     key: razorpayKeyId
   });
+});
+
+// Handle payment failure or cancellation from frontend
+const handlePaymentFailure = asyncHandler(async (req, res) => {
+  const { razorpayOrderId, reason } = req.body;
+
+  if (!razorpayOrderId) {
+    throw new ApiError(400, "Razorpay order ID is required");
+  }
+
+  logger.info({
+    message: "Payment failure reported",
+    razorpayOrderId,
+    reason: reason || "Not specified",
+    userId: req.user?._id
+  });
+
+  try {
+    await orderService.markOrderAsFailed(razorpayOrderId);
+    
+    return res.status(200).json(
+      new ApiResponse(200, null, "Order marked as failed")
+    );
+  } catch (error) {
+    logger.error({
+      message: "Failed to mark order as failed",
+      razorpayOrderId,
+      error: error.message
+    });
+    
+    // Don't throw error to frontend, just log it
+    return res.status(200).json(
+      new ApiResponse(200, null, "Payment failure recorded")
+    );
+  }
 });
 
 // Feature Flag Check
@@ -179,4 +216,4 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
   }
 });
 
-export { verifyRazorpayPayment, getRazorpayKey };
+export { verifyRazorpayPayment, getRazorpayKey, handlePaymentFailure };

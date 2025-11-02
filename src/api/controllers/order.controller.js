@@ -258,6 +258,15 @@ const getOrderStats = asyncHandler(async (req, res) => {
   );
 });
 
+// Admin: Cleanup abandoned orders
+const cleanupAbandonedOrders = asyncHandler(async (req, res) => {
+  const deletedCount = await orderService.cleanupAbandonedOrders();
+  
+  res.status(200).json(
+    new ApiResponse(200, { deletedCount }, `Cleaned up ${deletedCount} abandoned orders`)
+  );
+});
+
 export {
   initiateOrder,
   getUserOrders,
@@ -265,5 +274,6 @@ export {
   getOrderById,
   updateOrder,
   deleteOrder,
-  getOrderStats
+  getOrderStats,
+  cleanupAbandonedOrders
 };
