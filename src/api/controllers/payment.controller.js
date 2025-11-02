@@ -8,6 +8,7 @@ import crypto from "crypto";
 import mongoose from "mongoose";
 import logger from "../../utils/logger.js";
 import orderService from "../services/order.service.js";
+import { sendOrderConfirmationEmail } from "../../utils/mailer.js"; // Import mailer
 
 // Get Razorpay key for frontend
 const getRazorpayKey = asyncHandler(async (req, res) => {
@@ -133,6 +134,8 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   
+  let orderToEmail; // To store order ID for email
+
   try {
     const order = await Order.findOne({ razorpayOrderId: razorpay_order_id }).session(session);
 
@@ -163,6 +166,7 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
     order.razorpayPaymentId = razorpay_payment_id;
     order.razorpaySignature = razorpay_signature;
     await order.save({ session });
+    orderToEmail = order._id; // Save order ID for email
 
     // Decrement stock for each item
     for (const item of order.items) {
@@ -191,6 +195,16 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
       message: "Payment successfully verified and processed.",
       orderId: order._id,
     });
+    
+    // --- Send confirmation email (non-blocking) ---
+    if (orderToEmail) {
+      try {
+        sendOrderConfirmationEmail(orderToEmail);
+      } catch (emailError) {
+        logger.warn(`Failed to send Razorpay order confirmation email for order ${orderToEmail}`, emailError);
+      }
+    }
+    // --- End email send ---
 
     return res.status(200).json({ status: "ok", message: "Payment processed successfully." });
 

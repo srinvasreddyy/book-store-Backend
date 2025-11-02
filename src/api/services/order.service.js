@@ -6,6 +6,8 @@ import { HANDLING_FEE, BASE_DELIVERY_FEE } from "../../constants.js";
 import Razorpay from "razorpay";
 import mongoose from "mongoose";
 import { ApiError } from "../../utils/ApiError.js";
+import { sendOrderConfirmationEmail } from "../../utils/mailer.js"; // Import mailer
+import logger from "../../utils/logger.js"; // Import logger
 
 const instance = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -57,6 +59,8 @@ const initiateOrder = async (orderData, user, headers) => {
 
   const session = await mongoose.startSession();
   session.startTransaction();
+  
+  let newOrder; // To store the newly created order
 
   try {
     // --- Pre-order Stock Validation ---
@@ -133,7 +137,7 @@ const initiateOrder = async (orderData, user, headers) => {
     if (paymentMethod === "CASH_ON_DELIVERY") {
       order.status = "PROCESSING";
       order.paymentStatus = "PENDING";
-      await order.save({ session });
+      newOrder = await order.save({ session }); // Assign to newOrder
 
       for (const item of orderedItems) {
         await Book.findByIdAndUpdate(
@@ -148,7 +152,16 @@ const initiateOrder = async (orderData, user, headers) => {
         { session },
       );
       await session.commitTransaction();
-      return { order };
+      
+      // --- Send confirmation email (non-blocking) ---
+      try {
+        sendOrderConfirmationEmail(newOrder._id);
+      } catch (emailError) {
+        logger.warn(`Failed to send COD order confirmation email for order ${newOrder._id}`, emailError);
+      }
+      // --- End email send ---
+
+      return { order: newOrder }; // Return the saved order
     } else {
       // For all online methods, create a Razorpay order
       // NOTE: Order is saved with PENDING status but stock is NOT decremented
@@ -169,10 +182,10 @@ const initiateOrder = async (orderData, user, headers) => {
 
       order.razorpayOrderId = razorpayOrder.id;
       order.status = "PENDING"; // Order is pending until payment confirmation
-      await order.save({ session });
+      newOrder = await order.save({ session }); // Assign to newOrder
       await session.commitTransaction();
 
-      return { order, razorpayOrder };
+      return { order: newOrder, razorpayOrder }; // Return the saved order
     }
   } catch (error) {
     await session.abortTransaction();
