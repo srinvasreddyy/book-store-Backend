@@ -6,6 +6,18 @@ import { ApiError } from "../../utils/ApiError.js";
 import mongoose from "mongoose";
 import cache from "../../utils/cache.js";
 
+/**
+ * Clears all book-related list and detail caches.
+ * @param {string} [bookId] - If provided, also clears the cache for a specific book.
+ */
+const clearBookCaches = (bookId) => {
+    cache.delByPrefix("allBooks_");
+    cache.delByPrefix("newReleases_");
+    if (bookId) {
+        cache.del(`book_${bookId}`);
+    }
+};
+
 const createBook = async (bookData, user, files) => {
     const {
         title, author, isbn, publisher, numberOfPages, category, format,
@@ -177,7 +189,7 @@ const createBook = async (bookData, user, files) => {
         throw new ApiError(500, "Something went wrong while creating the book.");
     }
 
-    cache.del("allBooks");
+    clearBookCaches();
     return createdBook;
 };
 
@@ -312,6 +324,41 @@ const getBookById = async (bookId) => {
     cache.set(cacheKey, book);
     return book;
 };
+
+// --- FEATURE-022: Get New Releases ---
+const getNewReleases = async (queryParams) => {
+    const { page = 1, limit = 10 } = queryParams;
+    const cacheKey = `newReleases_${page}_${limit}`;
+
+    if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+    }
+
+    const options = {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        populate: [{ path: "tags" }, { path: "category", select: "name" }],
+        sort: { createdAt: -1 } // Sort by newest first
+    };
+
+    // Calculate the date 10 days ago
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
+    const aggregate = Book.aggregate([
+        {
+            $match: {
+                createdAt: { $gte: tenDaysAgo }
+            }
+        }
+    ]);
+
+    const books = await Book.aggregatePaginate(aggregate, options);
+
+    cache.set(cacheKey, books);
+    return books;
+};
+// --- End FEATURE-022 ---
 
 const updateBookDetails = async (bookId, bookData, user, files) => {
     if (!mongoose.isValidObjectId(bookId)) {
@@ -449,8 +496,7 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
         { new: true, runValidators: true }
     ).populate("tags").populate("category", "name parentCategory");
 
-    cache.del("allBooks");
-    cache.del(`book_${bookId}`);
+    clearBookCaches(bookId);
     return updatedBook;
 };
 
@@ -470,8 +516,7 @@ const deleteBook = async (bookId, user) => {
 
     await Book.findByIdAndDelete(bookId);
 
-    cache.del("allBooks");
-    cache.del(`book_${bookId}`);
+    clearBookCaches(bookId);
 };
 
 export default {
@@ -479,6 +524,7 @@ export default {
     getAllBooks,
     getAdminBooks,
     getBookById,
+    getNewReleases, 
     updateBookDetails,
     deleteBook,
 };

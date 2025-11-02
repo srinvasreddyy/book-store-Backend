@@ -33,6 +33,13 @@ const getBookById = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, book, "Book fetched successfully"));
 });
 
+const getNewReleases = asyncHandler(async (req, res) => {
+    const books = await bookService.getNewReleases(req.query);
+    return res
+        .status(200)
+        .json(new ApiResponse(200, books, "New releases fetched successfully"));
+});
+
 const updateBookDetails = asyncHandler(async (req, res) => {
     const updatedBook = await bookService.updateBookDetails(req.params.bookId, req.body, req.user, req.files);
     return res
@@ -52,6 +59,7 @@ export {
     getAllBooks,
     getAdminBooks,
     getBookById,
+    getNewReleases, 
     updateBookDetails,
     deleteBook
 };

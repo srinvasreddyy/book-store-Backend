@@ -4,6 +4,7 @@ import {
     getAllBooks,
     getAdminBooks,
     getBookById,
+    getNewReleases, // Import new controller
     updateBookDetails,
     deleteBook,
 } from "../controllers/book.controller.js";
@@ -15,6 +16,7 @@ const router = Router();
 
 // Public routes
 router.route("/").get(getAllBooks);
+router.route("/new-releases").get(getNewReleases); 
 router.route("/:bookId").get(getBookById);
 
 // Admin routes
