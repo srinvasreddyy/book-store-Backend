@@ -41,6 +41,7 @@ const getHomepageByAdminId = asyncHandler(async (req, res) => {
           carouselImages: [],
           youtubeVideos: [],
           shortVideos: [],
+          footerContent: {}, // Added for FEATURE-024
         },
         "This admin has not configured their homepage yet.",
       ),
@@ -76,6 +77,7 @@ const getPublicHomepage = asyncHandler(async (req, res) => {
           carouselImages: [],
           youtubeVideos: [],
           shortVideos: [],
+          footerContent: {}, // Added for FEATURE-024
         },
         'Homepage not configured yet.',
       ),
@@ -322,6 +324,44 @@ const updateShortVideo = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, homepage, "Short video updated successfully."));
 });
 
+const updateFooterContent = asyncHandler(async (req, res) => {
+  const {
+    email,
+    phoneNumber,
+    facebookUrl,
+    instagramUrl,
+    linkedInUrl
+  } = req.body;
+  
+  const homepage = await findOrCreateHomepage(req.user._id);
+
+  // Ensure the footerContent object exists
+  if (!homepage.footerContent) {
+    homepage.footerContent = {};
+  }
+
+  // Set or clear each field based on the request body
+  homepage.footerContent.email = email ?? homepage.footerContent.email;
+  homepage.footerContent.phoneNumber = phoneNumber ?? homepage.footerContent.phoneNumber;
+  homepage.footerContent.facebookUrl = facebookUrl ?? homepage.footerContent.facebookUrl;
+  homepage.footerContent.instagramUrl = instagramUrl ?? homepage.footerContent.instagramUrl;
+  homepage.footerContent.linkedInUrl = linkedInUrl ?? homepage.footerContent.linkedInUrl;
+
+  try {
+    const updatedHomepage = await homepage.save({ validateBeforeSave: true });
+    return res
+      .status(200)
+      .json(new ApiResponse(200, updatedHomepage, "Footer content updated successfully."));
+  } catch (error) {
+    // Handle validation errors from the schema
+    if (error.name === 'ValidationError') {
+      throw new ApiError(400, "Validation failed: " + error.message);
+    }
+    throw error;
+  }
+});
+// --- End FEATURE-024 ---
+
 export {
   getHomepageByAdminId as getHomepageByUsername, // aliasing for backward compatibility in exports if needed elsewhere
   getHomepageByAdminId,
@@ -335,4 +375,5 @@ export {
   addShortVideo,
   removeShortVideo,
   updateShortVideo,
+  updateFooterContent, 
 };

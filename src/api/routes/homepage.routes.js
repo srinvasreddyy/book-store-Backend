@@ -11,6 +11,7 @@ import {
   addShortVideo,
   removeShortVideo,
   updateShortVideo,
+  updateFooterContent, 
 } from "../controllers/homepage.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/rbac.middleware.js";
@@ -36,5 +37,7 @@ router.route("/youtube/:itemId").put(updateYoutubeVideo);
 router.route("/shorts").post(upload.single("video"), addShortVideo);
 router.route("/shorts/:itemId").delete(removeShortVideo);
 router.route("/shorts/:itemId").put(updateShortVideo);
+
+router.route("/footer").patch(updateFooterContent);
 
 export default router;
