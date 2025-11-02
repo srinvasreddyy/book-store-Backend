@@ -22,6 +22,7 @@ const createBook = async (bookData, user, files) => {
     const {
         title, author, isbn, publisher, numberOfPages, category, format,
         language, shortDescription, fullDescription, tags, price, stock,
+        deliveryCharge
     } = bookData;
 
     const isFeatured = bookData.isFeatured === 'true' || bookData.isFeatured === true;
@@ -42,7 +43,7 @@ const createBook = async (bookData, user, files) => {
         throw new ApiError(400, `Invalid format. Must be one of: ${allowedFormats.join(', ')}`);
     }
 
-    const numericFields = { numberOfPages, price, stock };
+    const numericFields = { numberOfPages, price, stock, deliveryCharge };
     for (const [field, value] of Object.entries(numericFields)) {
         const parsedValue = Number(value);
         if (value === undefined || isNaN(parsedValue)) {
@@ -176,6 +177,7 @@ const createBook = async (bookData, user, files) => {
         fullDescription,
         tags: tagIds,
         price,
+        deliveryCharge,
         stock,
         coverImages: imageUrls,
         samplePdfUrl,
@@ -483,7 +485,7 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
     }
 
     // Parse numeric fields if present to ensure validation during update
-    ['numberOfPages', 'price', 'stock'].forEach(field => {
+    ['numberOfPages', 'price', 'stock', 'deliveryCharge'].forEach(field => {
         if (bookData[field] !== undefined && bookData[field] !== null && bookData[field] !== '') {
             const n = Number(bookData[field]);
             if (!isNaN(n)) bookData[field] = n;

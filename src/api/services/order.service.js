@@ -2,7 +2,7 @@ import { Cart } from "../models/cart.model.js";
 import { Order } from "../models/order.model.js";
 import { Discount } from "../models/discount.model.js";
 import { Book } from "../models/book.model.js";
-import { HANDLING_FEE, BASE_DELIVERY_FEE } from "../../constants.js";
+import { HANDLING_FEE } from "../../constants.js";
 import Razorpay from "razorpay";
 import mongoose from "mongoose";
 import { ApiError } from "../../utils/ApiError.js";
@@ -82,8 +82,16 @@ const initiateOrder = async (orderData, user, headers) => {
 
     // --- Calculate Pricing ---
     let subtotal = 0;
+    let totalDeliveryFee = 0; // Initialize total delivery fee
+
     const orderedItems = cart.items.map((item) => {
       subtotal += item.book.price * item.quantity;
+      
+      // --- FEATURE-023: Calculate per-item delivery charge ---
+      // Use (item.book.deliveryCharge || 0) for robustness against old data
+      totalDeliveryFee += (item.book.deliveryCharge || 0) * item.quantity;
+      // --- End FEATURE-023 ---
+
       return {
         book: item.book._id,
         quantity: item.quantity,
@@ -94,7 +102,7 @@ const initiateOrder = async (orderData, user, headers) => {
 
     let discountAmount = 0;
     let appliedDiscount = null;
-    let deliveryFee = BASE_DELIVERY_FEE;
+    // let deliveryFee = BASE_DELIVERY_FEE; // <-- This is now calculated above
 
     if (couponCode && couponCode.trim() !== "") {
       const discount = await Discount.findOne({
@@ -108,14 +116,14 @@ const initiateOrder = async (orderData, user, headers) => {
         } else if (discount.type === "FIXED_AMOUNT") {
           discountAmount = discount.value;
         } else if (discount.type === "FREE_DELIVERY") {
-          deliveryFee = 0;
+          totalDeliveryFee = 0; // Set the calculated fee to 0
         }
         appliedDiscount = discount._id;
       }
     }
 
     const totalAfterDiscount = Math.max(0, subtotal - discountAmount);
-    const finalAmount = totalAfterDiscount + HANDLING_FEE + deliveryFee;
+    const finalAmount = totalAfterDiscount + HANDLING_FEE + totalDeliveryFee;
 
     // --- Create Order in 'PENDING' state ---
     const order = new Order({
@@ -124,7 +132,7 @@ const initiateOrder = async (orderData, user, headers) => {
       subtotal,
       discountAmount,
       handlingFee: HANDLING_FEE,
-      deliveryFee,
+      deliveryFee: totalDeliveryFee, // Save the calculated total
       finalAmount,
       appliedDiscount,
       paymentMethod,

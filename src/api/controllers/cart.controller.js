@@ -8,7 +8,7 @@ import mongoose from "mongoose";
 const getCart = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user._id }).populate({
     path: "items.book",
-    select: "title author price stock coverImage",
+    select: "title author price stock coverImage deliveryCharge",
   });
 
   if (!cart) {
@@ -98,7 +98,7 @@ const addItemToCart = asyncHandler(async (req, res) => {
   await cart.save();
   const populatedCart = await cart.populate({
     path: "items.book",
-    select: "title author price stock coverImage",
+    select: "title author price stock coverImage deliveryCharge",
   });
 
   return res
@@ -123,7 +123,7 @@ const removeItemFromCart = asyncHandler(async (req, res) => {
     { new: true },
   ).populate({
     path: "items.book",
-    select: "title author price stock coverImage",
+    select: "title author price stock coverImage deliveryCharge",
   });
 
   if (!cart) {

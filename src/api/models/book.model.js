@@ -65,6 +65,11 @@ const bookSchema = new Schema(
             required: true,
             min: 0,
         },
+        deliveryCharge: {
+            type: Number,
+            required: true,
+            min: 0,
+        },
         stock: {
             type: Number,
             required: true,
