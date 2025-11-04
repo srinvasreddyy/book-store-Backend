@@ -93,6 +93,7 @@ import dashboardRouter from "./api/routes/dashboard.routes.js";
 import tagRouter from "./api/routes/tag.routes.js";
 import homepageRouter from "./api/routes/homepage.routes.js";
 import paymentRouter from "./api/routes/payment.routes.js";
+import contactRouter from "./api/routes/contact.routes.js";
 
 // ✅ Routes Declaration
 app.use("/api/v1/healthcheck", healthCheckRouter);
@@ -108,6 +109,7 @@ app.use("/api/v1/dashboard", dashboardRouter);
 app.use("/api/v1/tags", tagRouter);
 app.use("/api/v1/homepage", homepageRouter);
 app.use("/api/v1/payments", paymentRouter);
+app.use("/api/v1/contacts", contactRouter);
 
 // ✅ Global Error Handler
 app.use((err, req, res, next) => {
