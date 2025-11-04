@@ -3,6 +3,7 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { Order } from "../models/order.model.js";
 import orderService from "../services/order.service.js";
+import { sendOrderStatusUpdateEmail } from "../../utils/mailer.js";
 
 const initiateOrder = asyncHandler(async (req, res) => {
   const result = await orderService.initiateOrder(
@@ -191,6 +192,12 @@ const updateOrder = asyncHandler(async (req, res) => {
   const { orderId } = req.params;
   const { status, deliveryBoyName, deliveryBoyMobile } = req.body;
 
+  // Get the current order before updating
+  const currentOrder = await Order.findById(orderId).populate('user', 'name email');
+  if (!currentOrder) {
+    throw new ApiError(404, "Order not found");
+  }
+
   const updateData = {};
   if (status) updateData.status = status.toUpperCase();
   if (deliveryBoyName !== undefined) updateData.deliveryBoyName = deliveryBoyName;
@@ -204,6 +211,21 @@ const updateOrder = asyncHandler(async (req, res) => {
 
   if (!order) {
     throw new ApiError(404, "Order not found");
+  }
+
+  // Check if status changed or delivery details were added/updated
+  const statusChanged = status && currentOrder.status !== order.status;
+  const deliveryAssigned = (deliveryBoyName !== undefined && currentOrder.deliveryBoyName !== order.deliveryBoyName) ||
+                          (deliveryBoyMobile !== undefined && currentOrder.deliveryBoyMobile !== order.deliveryBoyMobile);
+
+  // Send email notification if status changed or delivery person assigned
+  if (statusChanged || deliveryAssigned) {
+    try {
+      await sendOrderStatusUpdateEmail(order);
+    } catch (emailError) {
+      console.error('Failed to send order status update email:', emailError);
+      // Don't fail the update if email fails
+    }
   }
 
   res.status(200).json(
