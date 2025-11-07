@@ -98,33 +98,27 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password, role } = req.body;
-
-  // --- Input Validation ---
-  if (isNullOrWhitespace(email)) {
-    throw new ApiError(400, "Email is required to log in.");
-  }
-  if (isNullOrWhitespace(password)) {
-    throw new ApiError(400, "Password is required.");
-  }
-
+  
   const user = await User.findOne({ email: email.toLowerCase() });
-
+  
   if (!user) {
-    throw new ApiError(401, "Invalid user credentials."); // Generic message for security
+    throw new ApiError(401, "Invalid user credentials.");
   }
-
-  // If a role is provided in the login request, validate it.
-  if (role && user.role !== role) {
+  
+  // *** THIS IS THE LINE THAT CAUSES THE ERROR ***
+  // It checks if the role from the request ('ADMIN') matches the user's role in the database.
+  // If user.role is 'CUSTOMER', it throws an error.
+  if (role && user.role !== role) { 
     throw new ApiError(
       403,
       `Access denied. You are not authorized to log in as a ${role}.`,
     );
   }
-
+  
   const isPasswordValid = await user.isPasswordCorrect(password);
-
+  
   if (!isPasswordValid) {
-    throw new ApiError(401, "Invalid user credentials."); // Generic message for security
+    throw new ApiError(401, "Invalid user credentials.");
   }
 
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(

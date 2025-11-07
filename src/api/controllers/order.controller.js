@@ -3,6 +3,7 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { Order } from "../models/order.model.js";
 import orderService from "../services/order.service.js";
+import { sendOrderStatusUpdateEmail } from "../../utils/mailer.js";
 
 const initiateOrder = asyncHandler(async (req, res) => {
   const result = await orderService.initiateOrder(
@@ -105,10 +106,6 @@ const getAllOrders = asyncHandler(async (req, res) => {
     matchConditions.status = status.toUpperCase();
   }
 
-  if (search) {
-    // We'll handle search after population
-  }
-
   if (dateFrom || dateTo) {
     matchConditions.createdAt = {};
     if (dateFrom) matchConditions.createdAt.$gte = new Date(dateFrom);
@@ -116,7 +113,8 @@ const getAllOrders = asyncHandler(async (req, res) => {
   }
 
   const orders = await Order.find(matchConditions)
-    .populate('user', 'name email')
+    // FIX 1: Use 'fullName' instead of 'name' in the populate select string.
+    .populate('user', 'fullName email') 
     .populate('items.book', 'title')
     .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
     .skip((page - 1) * limit)
@@ -126,7 +124,8 @@ const getAllOrders = asyncHandler(async (req, res) => {
   let filteredOrders = orders;
   if (search) {
     filteredOrders = orders.filter(order =>
-      order.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      // FIX 2: Search by 'fullName' instead of 'name'.
+      order.user?.fullName?.toLowerCase().includes(search.toLowerCase()) ||
       order.user?.email?.toLowerCase().includes(search.toLowerCase())
     );
   }
@@ -135,7 +134,8 @@ const getAllOrders = asyncHandler(async (req, res) => {
   const transformedOrders = filteredOrders.map(order => ({
     _id: order._id,
     id: order._id.toString(),
-    customer: order.user?.name || 'Unknown',
+    // FIX 3: Use 'fullName' instead of 'name' for the customer field.
+    customer: order.user?.fullName || 'Unknown', 
     email: order.user?.email || '',
     shippingAddress: order.shippingAddress,
     books: order.items.map(item => ({
@@ -173,7 +173,7 @@ const getOrderById = asyncHandler(async (req, res) => {
   const { orderId } = req.params;
 
   const order = await Order.findById(orderId)
-    .populate('user', 'name email')
+    .populate('user', 'fullName email')
     .populate('items.book', 'title author price')
     .populate('appliedDiscount', 'code discountPercent');
 
@@ -191,6 +191,12 @@ const updateOrder = asyncHandler(async (req, res) => {
   const { orderId } = req.params;
   const { status, deliveryBoyName, deliveryBoyMobile } = req.body;
 
+  // Get the current order before updating
+  const currentOrder = await Order.findById(orderId).populate('user', 'FullName email');
+  if (!currentOrder) {
+    throw new ApiError(404, "Order not found");
+  }
+
   const updateData = {};
   if (status) updateData.status = status.toUpperCase();
   if (deliveryBoyName !== undefined) updateData.deliveryBoyName = deliveryBoyName;
@@ -200,10 +206,25 @@ const updateOrder = asyncHandler(async (req, res) => {
     orderId,
     updateData,
     { new: true, runValidators: true }
-  ).populate('user', 'name email');
+  ).populate('user', 'fullName email');
 
   if (!order) {
     throw new ApiError(404, "Order not found");
+  }
+
+  // Check if status changed or delivery details were added/updated
+  const statusChanged = status && currentOrder.status !== order.status;
+  const deliveryAssigned = (deliveryBoyName !== undefined && currentOrder.deliveryBoyName !== order.deliveryBoyName) ||
+                          (deliveryBoyMobile !== undefined && currentOrder.deliveryBoyMobile !== order.deliveryBoyMobile);
+
+  // Send email notification if status changed or delivery person assigned
+  if (statusChanged || deliveryAssigned) {
+    try {
+      await sendOrderStatusUpdateEmail(order);
+    } catch (emailError) {
+      console.error('Failed to send order status update email:', emailError);
+      // Don't fail the update if email fails
+    }
   }
 
   res.status(200).json(
