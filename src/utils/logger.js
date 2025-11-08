@@ -2,10 +2,21 @@ import winston from "winston";
 
 const logger = winston.createLogger({
   level: "info",
-  format: winston.format.json(),
+  //Eb Combine formats to ensure errors with stack traces are logged correctly
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }), // Tells winston to capture stack trace
+    winston.format.json()
+  ),
   transports: [
     new winston.transports.Console({
-      format: winston.format.simple(),
+      //Eb Use a readable format for console in development
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.printf(({ level, message, timestamp, stack }) => {
+           return `${timestamp} [${level}]: ${stack || message}`;
+        })
+      ),
     }),
   ],
 });
@@ -14,7 +25,14 @@ if (process.env.NODE_ENV !== "production") {
   logger.add(
     new winston.transports.File({ filename: "error.log", level: "error" }),
   );
-  logger.add(new winston.transports.File({ filename: "combined.log" }));
+  //Eb It's often better to keep combined logs in standard JSON for parsing tools
+  logger.add(new winston.transports.File({ 
+      filename: "combined.log",
+      format: winston.format.combine(
+          winston.format.timestamp(),
+          winston.format.json()
+      )
+  }));
 }
 
 export default logger;

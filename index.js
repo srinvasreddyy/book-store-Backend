@@ -5,6 +5,18 @@ dotenv.config({
 
 import connectDB from "./src/db/index.js";
 import { app } from "./src/app.js";
+import logger from "./src/utils/logger.js";
+
+process.on("unhandledRejection", (reason, promise) => {
+    logger.error("Unhandled Rejection at:", { promise, reason });
+    //Eb Optional: process.exit(1) if you want to restart on severe failures
+});
+
+//Eb Catch uncaught exceptions (e.g. synchronous code errors that crash the main thread)
+process.on("uncaughtException", (error) => {
+    logger.error("Uncaught Exception thrown:", error);
+    process.exit(1); // It's usually safer to restart the process after an uncaught exception
+});
 
 connectDB()
 .then(() => {

@@ -116,22 +116,41 @@ app.use("/api/v1/contacts", contactRouter);
 app.use("/api/v1/clients", clientRouter);
 // ✅ Global Error Handler
 app.use((err, req, res, next) => {
-  if (err instanceof ApiError) {
-    logger.error(err);
-    return res.status(err.statusCode).json({
-      statusCode: err.statusCode,
-      message: err.message,
-      success: err.success,
-      errors: err.errors,
-    });
+  //Eb If it's not an ApiError, wrap it so it has a standard structure.
+  //Eb This handles generic JS errors (like accessing props of undefined).
+  let error = err;
+  if (!(error instanceof ApiError)) {
+      //Eb Mongoose bad ObjectId often throws CastError, which we can treat as 400
+      const statusCode = error.name === 'CastError' ? 400 : 500;
+      const message = error.message || "Internal Server Error";
+      error = new ApiError(statusCode, message, error?.errors || [], err.stack);
   }
 
-  logger.error(err);
-  return res.status(500).json({
-    statusCode: 500,
-    message: "Internal Server Error",
-    success: false,
-  });
+  //Eb Prepare the response object
+  const response = {
+      statusCode: error.statusCode,
+      message: error.message,
+      success: false,
+      errors: error.errors || [],
+  };
+
+  //Eb ONLY in development/non-production, include the stack trace in the API response
+  //Eb for easier debugging without looking at server logs immediately.
+  if (process.env.NODE_ENV !== "production") {
+      response.stack = error.stack;
+  }
+
+  //Eb Enhanced logging with request context
+  logger.error(
+      `${error.statusCode} - ${error.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`,
+      { 
+         error_name: error.name,
+         stack: error.stack, //Eb Explicitly passing stack to logger
+         request_body: req.body //Eb Optional: log request body for debugging (be careful with sensitive data)
+      }
+  );
+
+  return res.status(error.statusCode).json(response);
 });
 
 export { app };
