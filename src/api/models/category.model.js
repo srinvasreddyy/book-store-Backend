@@ -15,11 +15,6 @@ const categorySchema = new Schema(
       type: String, // Cloudinary URL
       default: null,
     },
-    parentCategory: {
-      type: Schema.Types.ObjectId,
-      ref: "Category",
-      default: null,
-    },
     owner: {
       // null for global, admin's _id for custom
       type: Schema.Types.ObjectId,
@@ -30,6 +25,12 @@ const categorySchema = new Schema(
       type: Boolean,
       default: false,
     },
+    subCategories: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "SubCategory",
+      },
+    ],
   },
   {
     timestamps: true,
