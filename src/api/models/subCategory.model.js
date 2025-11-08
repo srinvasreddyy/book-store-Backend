@@ -18,14 +18,12 @@ const subCategorySchema = new Schema(
         parentCategory:
         {
             type: Schema.Types.ObjectId,
-            ref: "SubCategory",
+            ref: "Category",
         },
     },
     {
         timestamps: true,
     },
 );
-
-subCategorySchema.index({ name: 1, owner: 1 }, { unique: true });
 
 export const Category = mongoose.model("Category", subCategorySchema);
