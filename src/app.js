@@ -94,6 +94,9 @@ import tagRouter from "./api/routes/tag.routes.js";
 import homepageRouter from "./api/routes/homepage.routes.js";
 import paymentRouter from "./api/routes/payment.routes.js";
 import contactRouter from "./api/routes/contact.routes.js";
+// --- FEATURE-025 START ---
+import clientRouter from "./api/routes/client.routes.js";
+// --- FEATURE-025 END ---
 
 // ✅ Routes Declaration
 app.use("/api/v1/healthcheck", healthCheckRouter);
@@ -110,7 +113,7 @@ app.use("/api/v1/tags", tagRouter);
 app.use("/api/v1/homepage", homepageRouter);
 app.use("/api/v1/payments", paymentRouter);
 app.use("/api/v1/contacts", contactRouter);
-
+app.use("/api/v1/clients", clientRouter);
 // ✅ Global Error Handler
 app.use((err, req, res, next) => {
   if (err instanceof ApiError) {
