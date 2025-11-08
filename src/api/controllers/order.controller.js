@@ -192,11 +192,9 @@ const updateOrder = asyncHandler(async (req, res) => {
   const { status, deliveryBoyName, deliveryBoyMobile } = req.body;
 
   // Get the current order before updating
-<<<<<<< HEAD
-  const currentOrder = await Order.findById(orderId).populate('user', 'FullName email');
-=======
-  const currentOrder = await Order.findById(orderId).populate('user', 'name email');
->>>>>>> a2f67ab5be33fc16ad5e974d8b02f01cc2bd734c
+
+  const currentOrder = await Order.findById(orderId).populate('user', 'fullName email');
+
   if (!currentOrder) {
     throw new ApiError(404, "Order not found");
   }
