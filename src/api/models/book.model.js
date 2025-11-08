@@ -28,17 +28,21 @@ const bookSchema = new Schema(
         numberOfPages: {
             type: Number,
             required: true,
-            min: 1,
         },
         category: {
             type: Schema.Types.ObjectId,
             ref: "Category",
             required: true,
         },
+        subCategory: {
+            type: Schema.Types.ObjectId,
+            ref: "SubCategory",
+            default: null,
+        },
         format: {
             type: String,
             required: true,
-            enum: ['Hardcover', 'Paperback'], // Restricted to physical formats
+            enum: ['Hardcover', 'Paperback'],
         },
         language: {
             type: String,
@@ -47,9 +51,6 @@ const bookSchema = new Schema(
         },
         shortDescription: {
             type: String,
-            required: true,
-            trim: true,
-            maxlength: 250,
         },
         fullDescription: {
             type: String,
@@ -73,11 +74,9 @@ const bookSchema = new Schema(
         stock: {
             type: Number,
             required: true,
-            min: 0,
-            default: 0,
         },
         coverImages: {
-            type: [String], // Array of URLs from Cloudinary
+            type: [String],
             required: true,
             validate: [
                 (val) => val.length > 0 && val.length <= 5,
@@ -85,7 +84,7 @@ const bookSchema = new Schema(
             ]
         },
         samplePdfUrl: {
-            type: String, // URL for sample PDF from Cloudinary
+            type: String,
             default: null,
         },
         uploadedBy: {

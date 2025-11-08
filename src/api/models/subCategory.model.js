@@ -1,29 +1,33 @@
 import mongoose, { Schema } from "mongoose";
 
 const subCategorySchema = new Schema(
-    {
-        name: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        description: {
-            type: String,
-            trim: true,
-        },
-        backgroundImage: {
-            type: String, // Cloudinary URL
-            default: null,
-        },
-        parentCategory:
-        {
-            type: Schema.Types.ObjectId,
-            ref: "Category",
-        },
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-    {
-        timestamps: true,
+    description: {
+      type: String,
+      trim: true,
     },
+    parentCategory: {
+      type: Schema.Types.ObjectId,
+      ref: "Category",
+      required: true,
+    },
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+  },
+  {
+    timestamps: true,
+  },
 );
 
-export const Category = mongoose.model("Category", subCategorySchema);
+// Prevent duplicate subcategory names within the same parent category
+subCategorySchema.index({ name: 1, parentCategory: 1 }, { unique: true });
+
+export const SubCategory = mongoose.model("SubCategory", subCategorySchema);

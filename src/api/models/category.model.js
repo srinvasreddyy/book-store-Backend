@@ -6,6 +6,7 @@ const categorySchema = new Schema(
       type: String,
       required: true,
       trim: true,
+      unique: true,
     },
     description: {
       type: String,
@@ -18,7 +19,7 @@ const categorySchema = new Schema(
     owner: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      default: null,
+      default: null, // Null means global category
     },
     subCategories: [
       {
@@ -31,7 +32,5 @@ const categorySchema = new Schema(
     timestamps: true,
   },
 );
-
-categorySchema.index({ name: 1 }, { unique: true });
 
 export const Category = mongoose.model("Category", categorySchema);

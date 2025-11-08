@@ -1,38 +1,41 @@
 import { Router } from "express";
 import {
   createCategory,
-  getGlobalCategories,
   getAllCategories,
-  getTopCategories,
-  getSelectableCategories,
-  getAdminCategoriesWithBooks,
+  getCategoryById,
   updateCategory,
   deleteCategory,
 } from "../controllers/category.controller.js";
+import {
+  createSubCategory,
+  getAllSubCategories,
+  updateSubCategory,
+  deleteSubCategory,
+} from "../controllers/subCategory.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/rbac.middleware.js";
-import { upload } from "../middlewares/multer.middleware.js"; // Import upload
+import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
-// Public routes
-router.route("/").get(getGlobalCategories); // Existing route for global categories
-router.route("/all").get(getAllCategories); // New route for all categories
-router.route("/top").get(getTopCategories); // New route for top categories
+// --- Public Routes ---
+router.route("/").get(getAllCategories);
+router.route("/subs").get(getAllSubCategories); // List all subcategories
+router.route("/:categoryId").get(getCategoryById);
 
-// Admin routes
+// --- Admin Routes ---
 router.use(verifyJWT, verifyAdmin);
 
-router
-  .route("/")
-  .post(upload.single("backgroundImage"), createCategory); // Add middleware
-
-router.route("/selectable").get(getSelectableCategories);
-router.route("/my-books").get(getAdminCategoriesWithBooks);
-
-router
-  .route("/:categoryId")
-  .patch(upload.single("backgroundImage"), updateCategory) // Add middleware
+// Category management
+router.route("/").post(upload.single("backgroundImage"), createCategory);
+router.route("/:categoryId")
+  .patch(upload.single("backgroundImage"), updateCategory)
   .delete(deleteCategory);
+
+// Subcategory management
+router.route("/subs").post(createSubCategory);
+router.route("/subs/:subCategoryId")
+  .patch(updateSubCategory)
+  .delete(deleteSubCategory);
 
 export default router;
