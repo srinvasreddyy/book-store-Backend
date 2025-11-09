@@ -77,10 +77,10 @@ const bookSchema = new Schema(
         },
         coverImages: {
             type: [String],
-            required: true,
+            default: [],
             validate: [
-                (val) => val.length > 0 && val.length <= 5,
-                'A book must have between 1 and 5 cover images.'
+                (val) => val.length <= 10,
+                'A book can have at most 10 cover images.'
             ]
         },
         samplePdfUrl: {

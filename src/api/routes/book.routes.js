@@ -28,7 +28,7 @@ router
         verifyJWT, 
         verifyAdmin, 
         upload.fields([
-            { name: 'coverImages', maxCount: 5 },
+            { name: 'coverImages', maxCount: 10 },
             { name: 'samplePdf', maxCount: 1 }
         ]), 
         createBook
@@ -40,7 +40,7 @@ router
         verifyJWT, 
         verifyAdmin,
         upload.fields([
-            { name: 'coverImages', maxCount: 5 },
+            { name: 'coverImages', maxCount: 10 },
             { name: 'samplePdf', maxCount: 1 }
         ]),
         updateBookDetails

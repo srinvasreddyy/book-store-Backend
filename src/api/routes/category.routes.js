@@ -5,6 +5,7 @@ import {
   getCategoryById,
   updateCategory,
   deleteCategory,
+  getCategoryNames,
 } from "../controllers/category.controller.js";
 import {
   createSubCategory,
@@ -21,6 +22,7 @@ const router = Router();
 // --- Public Routes ---
 router.route("/").get(getAllCategories);
 router.route("/subs").get(getAllSubCategories); // List all subcategories
+router.route("/names").get(getCategoryNames); // Fetch category/subcategory names by ID
 router.route("/:categoryId").get(getCategoryById);
 
 // --- Admin Routes ---

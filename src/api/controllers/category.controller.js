@@ -155,10 +155,36 @@ const deleteCategory = asyncHandler(async (req, res) => {
   }
 });
 
+const getCategoryNames = asyncHandler(async (req, res) => {
+    const { categoryId, subCategoryId } = req.query ;
+    const result = {};
+  
+    if (categoryId) {
+      if (!mongoose.isValidObjectId(categoryId)) {
+         throw new ApiError(400, "Invalid category ID format.");
+      }
+      const category = await Category.findById(categoryId).select("name");
+      result.category = category ? category.name : null;
+    }
+  
+    if (subCategoryId) {
+      if (!mongoose.isValidObjectId(subCategoryId)) {
+         throw new ApiError(400, "Invalid subcategory ID format.");
+      }
+      const subCategory = await SubCategory.findById(subCategoryId).select("name");
+      result.subCategory = subCategory ? subCategory.name : null;
+    }
+  
+    return res
+      .status(200)
+      .json(new ApiResponse(200, result, "Category names fetched successfully."));
+  });
+
 export {
   createCategory,
   getAllCategories,
   getCategoryById,
   updateCategory,
   deleteCategory,
+  getCategoryNames,
 };

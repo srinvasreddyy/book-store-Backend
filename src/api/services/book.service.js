@@ -46,8 +46,10 @@ const createBook = async (bookData, user, files) => {
     });
 
     // File Validation
-    if (!files?.coverImages || files.coverImages.length === 0) throw new ApiError(400, "At least one cover image is required.");
-    if (files.coverImages.length > 5) throw new ApiError(400, "Max 5 cover images.");
+    // Images are now optional. If provided, must not exceed 10.
+    if (files?.coverImages && files.coverImages.length > 10) {
+        throw new ApiError(400, "Max 10 cover images.");
+    }
 
     // Category Validation
     if (!mongoose.isValidObjectId(category)) throw new ApiError(400, "Invalid category ID.");
@@ -98,8 +100,11 @@ const createBook = async (bookData, user, files) => {
     }
 
     // Image Upload
-    const imageUrls = (await Promise.all(files.coverImages.map(f => uploadOnCloudinary(f.buffer))))
-        .map(r => { if (!r?.url) throw new ApiError(500, "Image upload failed"); return r.url; });
+    let imageUrls = [];
+    if (files?.coverImages) {
+        imageUrls = (await Promise.all(files.coverImages.map(f => uploadOnCloudinary(f.buffer))))
+            .map(r => { if (!r?.url) throw new ApiError(500, "Image upload failed"); return r.url; });
+    }
     
     let samplePdfUrl = null;
     if (files.samplePdf?.[0]) {
@@ -215,12 +220,10 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
 
     // 3. Combine and Validate Total
     const finalCoverImages = [...imagesToKeep, ...newImageUrls];
-    if (finalCoverImages.length > 5) {
-        throw new ApiError(400, `Cannot have more than 5 cover images. You kept ${imagesToKeep.length} and uploaded ${newImageUrls.length}.`);
+    if (finalCoverImages.length > 10) {
+        throw new ApiError(400, `Cannot have more than 10 cover images. You kept ${imagesToKeep.length} and uploaded ${newImageUrls.length}.`);
     }
-    if (finalCoverImages.length === 0) {
-         throw new ApiError(400, "A book must have at least one cover image.");
-    }
+    // Images are optional now, so no minimum check.
     bookData.coverImages = finalCoverImages;
 
     // Update basic fields
