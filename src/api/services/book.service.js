@@ -19,7 +19,7 @@ const createBook = async (bookData, user, files) => {
     const {
         title, author, isbn, publisher, numberOfPages, category, subCategory, format,
         language, shortDescription, fullDescription, tags, price, stock,
-        deliveryCharge
+        deliveryCharge, salePrice // <--- 1. Destructure salePrice
     } = bookData;
 
     const isFeatured = bookData.isFeatured === 'true' || bookData.isFeatured === true;
@@ -44,6 +44,11 @@ const createBook = async (bookData, user, files) => {
              throw new ApiError(400, `${fieldNames[index]} must be a valid non-negative number.`);
         }
     });
+
+    // <--- 2. Add validation for salePrice (Optional but must be valid if provided)
+    if (salePrice !== undefined && (isNaN(Number(salePrice)) || Number(salePrice) < 0)) {
+        throw new ApiError(400, "Sale price must be a valid non-negative number.");
+    }
 
     // File Validation
     // Images are now optional. If provided, must not exceed 10.
@@ -113,12 +118,13 @@ const createBook = async (bookData, user, files) => {
         samplePdfUrl = r.url;
     }
 
-    const book = await Book.create({
+const book = await Book.create({
         title, author, isbn, publisher, numberOfPages,
         category: categoryDoc._id,
         subCategory: validSubCategoryId,
         format, language, shortDescription, fullDescription,
         tags: tagIds, price, deliveryCharge, stock,
+        salePrice: salePrice ? Number(salePrice) : 0, // <--- 3. Add to creation object
         coverImages: imageUrls, samplePdfUrl,
         uploadedBy: user._id, isFeatured, isBestSeller
     });

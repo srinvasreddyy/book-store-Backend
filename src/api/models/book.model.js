@@ -66,6 +66,11 @@ const bookSchema = new Schema(
             required: true,
             min: 0,
         },
+        salePrice: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
         deliveryCharge: {
             type: Number,
             required: true,

@@ -65,6 +65,10 @@ const contactSchema = new Schema(
         type: String,
         trim: true,
       },
+      telegram: {
+        type: String,
+        trim: true,
+      },
     },
 
     // Additional Information

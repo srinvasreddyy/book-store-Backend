@@ -74,8 +74,9 @@ const createContact = asyncHandler(async (req, res) => {
   }
 
   // Validate social media URLs
-  if (socialMedia) {
-    const socialKeys = ["facebook", "twitter", "instagram", "linkedin", "youtube", "whatsapp"];
+ if (socialMedia) {
+    const socialKeys = ["facebook", "twitter", "instagram", "linkedin", "youtube", "whatsapp", "telegram"];
+    
     for (const key of socialKeys) {
       if (socialMedia[key] && !isValidUrl(socialMedia[key])) {
         throw new ApiError(400, `Invalid ${key} URL format`);
@@ -126,7 +127,8 @@ const updateContact = asyncHandler(async (req, res) => {
 
   // Validate social media URLs
   if (socialMedia) {
-    const socialKeys = ["facebook", "twitter", "instagram", "linkedin", "youtube", "whatsapp"];
+    const socialKeys = ["facebook", "twitter", "instagram", "linkedin", "youtube", "whatsapp", "telegram"];
+    
     for (const key of socialKeys) {
       if (socialMedia[key] && !isValidUrl(socialMedia[key])) {
         throw new ApiError(400, `Invalid ${key} URL format`);
