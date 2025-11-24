@@ -94,9 +94,10 @@ import tagRouter from "./api/routes/tag.routes.js";
 import homepageRouter from "./api/routes/homepage.routes.js";
 import paymentRouter from "./api/routes/payment.routes.js";
 import contactRouter from "./api/routes/contact.routes.js";
-// --- FEATURE-025 START ---
 import clientRouter from "./api/routes/client.routes.js";
-// --- FEATURE-025 END ---
+// NEW ROUTES
+import specialRouter from "./api/routes/special.routes.js";
+import freeContentRouter from "./api/routes/freeContent.routes.js";
 
 // ✅ Routes Declaration
 app.use("/api/v1/healthcheck", healthCheckRouter);
@@ -114,19 +115,19 @@ app.use("/api/v1/homepage", homepageRouter);
 app.use("/api/v1/payments", paymentRouter);
 app.use("/api/v1/contacts", contactRouter);
 app.use("/api/v1/clients", clientRouter);
+// NEW ROUTES USAGE
+app.use("/api/v1/specials", specialRouter);
+app.use("/api/v1/free-content", freeContentRouter);
+
 // ✅ Global Error Handler
 app.use((err, req, res, next) => {
-  //Eb If it's not an ApiError, wrap it so it has a standard structure.
-  //Eb This handles generic JS errors (like accessing props of undefined).
   let error = err;
   if (!(error instanceof ApiError)) {
-      //Eb Mongoose bad ObjectId often throws CastError, which we can treat as 400
       const statusCode = error.name === 'CastError' ? 400 : 500;
       const message = error.message || "Internal Server Error";
       error = new ApiError(statusCode, message, error?.errors || [], err.stack);
   }
 
-  //Eb Prepare the response object
   const response = {
       statusCode: error.statusCode,
       message: error.message,
@@ -134,19 +135,16 @@ app.use((err, req, res, next) => {
       errors: error.errors || [],
   };
 
-  //Eb ONLY in development/non-production, include the stack trace in the API response
-  //Eb for easier debugging without looking at server logs immediately.
   if (process.env.NODE_ENV !== "production") {
       response.stack = error.stack;
   }
 
-  //Eb Enhanced logging with request context
   logger.error(
       `${error.statusCode} - ${error.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`,
       { 
          error_name: error.name,
-         stack: error.stack, //Eb Explicitly passing stack to logger
-         request_body: req.body //Eb Optional: log request body for debugging (be careful with sensitive data)
+         stack: error.stack,
+         request_body: req.body
       }
   );
 

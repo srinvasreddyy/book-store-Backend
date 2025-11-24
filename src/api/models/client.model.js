@@ -5,19 +5,23 @@ const clientSchema = new Schema(
         name: {
             type: String,
             required: true,
-            trim: true,
+            trim: true
         },
-        url : {
+        url: {
             type: String,
             trim: true,
+            default: ''
         },
-        image: {
-            type: String, 
+        logo: {
+            type: String, // Cloudinary URL
+            required: true
+        },
+        isActive: {
+            type: Boolean,
+            default: true
         }
     },
-    {
-        timestamps: true,
-    },
+    { timestamps: true }
 );
 
 export const Client = mongoose.model("Client", clientSchema);

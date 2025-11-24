@@ -104,6 +104,10 @@ const bookSchema = new Schema(
         isBestSeller: {
             type: Boolean,
             default: false,
+        },
+        oldBook: {
+            type: Boolean,
+            default: false,
         }
     },
     {
