@@ -40,6 +40,15 @@ const categorySchema = new Schema(
       ref: "User",
       default: null,
     },
+    // --- Pinning System ---
+    isPinned: {
+      type: Boolean,
+      default: false,
+    },
+    pinnedAt: {
+      type: Date,
+      default: null, // Used for chronological sorting
+    },
   },
   {
     timestamps: true,

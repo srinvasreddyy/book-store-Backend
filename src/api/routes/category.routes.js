@@ -2,30 +2,29 @@ import { Router } from "express";
 import {
     createCategory,
     getAllCategories,
-    getCategoryList,
     getCategoryById,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    toggleCategoryPin
 } from "../controllers/category.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { verifyAdmin } from "../middlewares/rbac.middleware.js";
+import { verifyAdmin } from "../middlewares/rbac.middleware.js"; // FIXED: Imported from rbac.middleware.js
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
-// Public routes
-router.route("/").get(getAllCategories); // Returns tree structure
-router.route("/list").get(getCategoryList); // Returns flat list (for internal use/dropdowns)
-router.route("/:categoryId").get(getCategoryById);
-
-// Admin routes
-router.use(verifyJWT, verifyAdmin);
-
+// Public route for fetching categories
 router.route("/")
-    .post(upload.single("backgroundImage"), createCategory);
+    .get(getAllCategories)
+    .post(verifyJWT, verifyAdmin, upload.single("backgroundImage"), createCategory);
 
 router.route("/:categoryId")
-    .patch(upload.single("backgroundImage"), updateCategory)
-    .delete(deleteCategory);
+    .get(getCategoryById)
+    .put(verifyJWT, verifyAdmin, upload.single("backgroundImage"), updateCategory)
+    .delete(verifyJWT, verifyAdmin, deleteCategory);
+
+// Pinning Route
+router.route("/:categoryId/pin")
+    .patch(verifyJWT, verifyAdmin, toggleCategoryPin);
 
 export default router;
