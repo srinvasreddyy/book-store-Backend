@@ -1,7 +1,7 @@
 import { Book } from "../models/book.model.js";
 import { Tag } from "../models/tag.model.js";
 import { Category } from "../models/category.model.js";
-import { SubCategory } from "../models/subCategory.model.js";
+// Removed SubCategory import as it is deprecated in the new architecture
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
 import { ApiError } from "../../utils/ApiError.js";
 import mongoose from "mongoose";
@@ -17,13 +17,14 @@ const clearBookCaches = (bookId) => {
 
 const createBook = async (bookData, user, files) => {
     const {
-        title, author, isbn, publisher, numberOfPages, category, subCategory, format,
+        title, author, isbn, publisher, numberOfPages, category, format,
         language, shortDescription, fullDescription, tags, price, stock,
-        deliveryCharge, salePrice // <--- 1. Destructure salePrice
+        deliveryCharge, salePrice, oldBook
     } = bookData;
 
     const isFeatured = bookData.isFeatured === 'true' || bookData.isFeatured === true;
     const isBestSeller = bookData.isBestSeller === 'true' || bookData.isBestSeller === true;
+    const isOldBook = bookData.oldBook === 'true' || bookData.oldBook === true;
 
     // Basic Validation
     const requiredFields = { title, author, publisher, category, format, language, shortDescription, fullDescription };
@@ -45,13 +46,11 @@ const createBook = async (bookData, user, files) => {
         }
     });
 
-    // <--- 2. Add validation for salePrice (Optional but must be valid if provided)
     if (salePrice !== undefined && (isNaN(Number(salePrice)) || Number(salePrice) < 0)) {
         throw new ApiError(400, "Sale price must be a valid non-negative number.");
     }
 
     // File Validation
-    // Images are now optional. If provided, must not exceed 10.
     if (files?.coverImages && files.coverImages.length > 10) {
         throw new ApiError(400, "Max 10 cover images.");
     }
@@ -61,19 +60,7 @@ const createBook = async (bookData, user, files) => {
     const categoryDoc = await Category.findById(category);
     if (!categoryDoc) throw new ApiError(404, "Category not found.");
 
-    // SubCategory Validation
-    let validSubCategoryId = null;
-    if (subCategory && subCategory !== 'null' && subCategory !== '') {
-        if (!mongoose.isValidObjectId(subCategory)) throw new ApiError(400, "Invalid subcategory ID.");
-        const subDoc = await SubCategory.findById(subCategory);
-        if (!subDoc) throw new ApiError(404, "Subcategory not found.");
-        if (subDoc.parentCategory.toString() !== category.toString()) {
-            throw new ApiError(400, "Subcategory does not belong to selected parent category.");
-        }
-        validSubCategoryId = subDoc._id;
-    }
-
-    // ISBN Check (Optional, but we still check for duplicates if provided)
+    // ISBN Check
     if (isbn && isbn.trim() !== "") {
         if (await Book.findOne({ isbn })) throw new ApiError(409, "ISBN already exists.");
     }
@@ -85,7 +72,6 @@ const createBook = async (bookData, user, files) => {
          let pIds = toArray(bookData.tagIds).filter(t => mongoose.isValidObjectId(t));
          let pNames = toArray(bookData.tagNames).map(t => String(t).trim().toLowerCase()).filter(Boolean);
          
-         // Support legacy 'tags' field (CSV or mixed array)
          if (tags) {
              const tagList = typeof tags === 'string' ? tags.split(',') : toArray(tags);
              tagList.forEach(t => {
@@ -104,46 +90,51 @@ const createBook = async (bookData, user, files) => {
          tagIds = [...new Set(pIds)];
     }
 
-    // Image Upload
+    // Image Upload - CHANGED TO USE PATH
     let imageUrls = [];
     if (files?.coverImages) {
-        imageUrls = (await Promise.all(files.coverImages.map(f => uploadOnCloudinary(f.buffer))))
-            .map(r => { if (!r?.url) throw new ApiError(500, "Image upload failed"); return r.url; });
+        imageUrls = (await Promise.all(files.coverImages.map(async (f) => {
+             const result = await uploadOnCloudinary(f.path);
+             if (!result?.url) throw new ApiError(500, `Image upload failed for ${f.originalname}`);
+             return result.url;
+        })));
     }
     
+    // PDF Upload - CHANGED TO USE PATH
     let samplePdfUrl = null;
     if (files.samplePdf?.[0]) {
-        const r = await uploadOnCloudinary(files.samplePdf[0].buffer);
+        const r = await uploadOnCloudinary(files.samplePdf[0].path);
         if (!r?.url) throw new ApiError(500, "PDF upload failed");
         samplePdfUrl = r.url;
     }
 
-const book = await Book.create({
+    const book = await Book.create({
         title, author, isbn, publisher, numberOfPages,
         category: categoryDoc._id,
-        subCategory: validSubCategoryId,
+        // Removed subCategory
         format, language, shortDescription, fullDescription,
         tags: tagIds, price, deliveryCharge, stock,
-        salePrice: salePrice ? Number(salePrice) : 0, // <--- 3. Add to creation object
+        salePrice: salePrice ? Number(salePrice) : 0,
         coverImages: imageUrls, samplePdfUrl,
-        uploadedBy: user._id, isFeatured, isBestSeller
+        uploadedBy: user._id, isFeatured, isBestSeller, oldBook: isOldBook
     });
 
     clearBookCaches();
-    return await Book.findById(book._id).populate(["tags", "category", "subCategory"]);
+    return await Book.findById(book._id).populate(["tags", "category"]);
 };
 
 const getAllBooks = async (queryParams) => {
     const cacheKey = `allBooks_${JSON.stringify(queryParams)}`;
     if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-    const { page = 1, limit = 10, category, subCategory, search, sortBy, sortOrder = 'asc', tags, isBestSeller } = queryParams;
+    // Added oldBook to filters
+    const { page = 1, limit = 10, category, search, sortBy, sortOrder = 'asc', tags, isBestSeller, oldBook } = queryParams;
     const match = {};
 
     if (search) match.$or = [{ title: { $regex: search, $options: 'i' } }, { author: { $regex: search, $options: 'i' } }];
     if (category && mongoose.isValidObjectId(category)) match.category = new mongoose.Types.ObjectId(category);
-    if (subCategory && mongoose.isValidObjectId(subCategory)) match.subCategory = new mongoose.Types.ObjectId(subCategory);
     if (isBestSeller !== undefined) match.isBestSeller = (isBestSeller === 'true' || isBestSeller === true);
+    if (oldBook !== undefined) match.oldBook = (oldBook === 'true' || oldBook === true);
 
     if (tags) {
         const tagIds = (await Tag.find({ name: { $in: tags.split(',').map(t => t.trim().toLowerCase()) } }).select('_id')).map(t => t._id);
@@ -155,7 +146,7 @@ const getAllBooks = async (queryParams) => {
 
     const books = await Book.aggregatePaginate(aggregate, {
         page: parseInt(page), limit: parseInt(limit),
-        populate: [{ path: "tags" }, { path: "category", select: "name" }, { path: "subCategory", select: "name" }]
+        populate: [{ path: "tags" }, { path: "category", select: "name" }]
     });
 
     cache.set(cacheKey, books);
@@ -167,7 +158,7 @@ const getBookById = async (bookId) => {
     const cacheKey = `book_${bookId}`;
     if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-    const book = await Book.findById(bookId).populate(["tags", "category", "subCategory"]);
+    const book = await Book.findById(bookId).populate(["tags", "category"]);
     if (!book) throw new ApiError(404, "Book not found.");
     
     cache.set(cacheKey, book);
@@ -179,62 +170,38 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
     const book = await Book.findById(bookId);
     if (!book) throw new ApiError(404, "Book not found.");
     
-    // Ensure critical fields aren't wiped if not provided in update
     delete bookData.uploadedBy; 
 
-    // Category & SubCategory Integrity Check
-    const newCatId = bookData.category || book.category.toString();
-    
     if (bookData.category && bookData.category !== book.category.toString()) {
          if (!await Category.exists({ _id: bookData.category })) throw new ApiError(404, "New category not found.");
     }
+    
+    // Removed SubCategory logic
 
-    if (bookData.subCategory !== undefined) {
-        if (bookData.subCategory && bookData.subCategory !== 'null') {
-            const sub = await SubCategory.findById(bookData.subCategory);
-            if (!sub) throw new ApiError(404, "Subcategory not found.");
-            if (sub.parentCategory.toString() !== newCatId) {
-                throw new ApiError(400, "Subcategory must belong to the book's category.");
-            }
-        } else {
-            bookData.subCategory = null;
-        }
-    } else if (bookData.category && book.subCategory) {
-        // If category changed but subCategory wasn't explicitly updated, check if old sub is still valid.
-        const oldSub = await SubCategory.findById(book.subCategory);
-        if (oldSub && oldSub.parentCategory.toString() !== newCatId) {
-            bookData.subCategory = null; // Invalidate incompatible subcategory
-        }
-    }
-
-    // ROBUST IMAGE UPDATE MECHANISM
-    // 1. Identify images to keep (frontend should send array of URLs to keep in bookData.coverImages)
-    // If bookData.coverImages is NOT provided, we assume we keep ALL existing images.
     let imagesToKeep = book.coverImages;
     if (bookData.coverImages !== undefined) {
          const providedList = Array.isArray(bookData.coverImages) ? bookData.coverImages : [bookData.coverImages];
-         // Security: Only allow keeping images that genuinely belonged to this book
          imagesToKeep = providedList.filter(url => typeof url === 'string' && book.coverImages.includes(url));
     }
 
-    // 2. Upload NEW images
     let newImageUrls = [];
     if (files?.coverImages?.length) {
-         newImageUrls = (await Promise.all(files.coverImages.map(f => uploadOnCloudinary(f.buffer))))
-             .map(r => r.url);
+         // CHANGED TO USE PATH
+         newImageUrls = (await Promise.all(files.coverImages.map(async (f) => {
+             const result = await uploadOnCloudinary(f.path);
+             if (!result?.url) throw new ApiError(500, `Image upload failed for ${f.originalname}`);
+             return result.url;
+         })));
     }
 
-    // 3. Combine and Validate Total
     const finalCoverImages = [...imagesToKeep, ...newImageUrls];
     if (finalCoverImages.length > 10) {
-        throw new ApiError(400, `Cannot have more than 10 cover images. You kept ${imagesToKeep.length} and uploaded ${newImageUrls.length}.`);
+        throw new ApiError(400, `Cannot have more than 10 cover images.`);
     }
-    // Images are optional now, so no minimum check.
     bookData.coverImages = finalCoverImages;
 
-    // Update basic fields
     const updated = await Book.findByIdAndUpdate(bookId, { $set: bookData }, { new: true, runValidators: true })
-        .populate(["tags", "category", "subCategory"]);
+        .populate(["tags", "category"]);
     
     clearBookCaches(bookId);
     return updated;
@@ -247,8 +214,7 @@ const getAdminBooks = async (queryParams, user) => {
         limit: parseInt(limit, 10),
         populate: [
             { path: "tags" },
-            { path: "category", select: "name" },
-            { path: "subCategory", select: "name" }
+            { path: "category", select: "name" }
         ],
         sort: { [sortBy || 'createdAt']: sortOrder === 'desc' ? -1 : 1 }
     };
@@ -270,8 +236,7 @@ const getNewReleases = async (queryParams) => {
         limit: parseInt(limit, 10),
         populate: [
             { path: "tags" },
-            { path: "category", select: "name" },
-            { path: "subCategory", select: "name" }
+            { path: "category", select: "name" }
         ],
         sort: { createdAt: -1 }
     };

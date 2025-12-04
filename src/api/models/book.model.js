@@ -7,13 +7,13 @@ const bookSchema = new Schema(
             type: String,
             required: true,
             trim: true,
-            index: "text",
+            // index: "text", <--- REMOVED (Defined at bottom)
         },
         author: {
             type: String,
             required: true,
             trim: true,
-            index: "text",
+            // index: "text", <--- REMOVED (Defined at bottom)
         },
         isbn: {
             type: String,
@@ -34,11 +34,7 @@ const bookSchema = new Schema(
             ref: "Category",
             required: true,
         },
-        subCategory: {
-            type: Schema.Types.ObjectId,
-            ref: "SubCategory",
-            default: null,
-        },
+        // subCategory field is removed as per new architecture
         format: {
             type: String,
             required: true,
@@ -113,6 +109,12 @@ const bookSchema = new Schema(
     {
         timestamps: true,
     }
+);
+
+// ✅ FIX: Explicitly define index with a dummy override so it ignores your 'language' field
+bookSchema.index(
+    { title: "text", author: "text" }, 
+    { language_override: "dummy_language_field" }
 );
 
 bookSchema.plugin(mongooseAggregatePaginate);

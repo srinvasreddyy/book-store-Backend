@@ -1,43 +1,31 @@
 import { Router } from "express";
 import {
-  createCategory,
-  getAllCategories,
-  getCategoryById,
-  updateCategory,
-  deleteCategory,
-  getCategoryNames,
+    createCategory,
+    getAllCategories,
+    getCategoryList,
+    getCategoryById,
+    updateCategory,
+    deleteCategory
 } from "../controllers/category.controller.js";
-import {
-  createSubCategory,
-  getAllSubCategories,
-  updateSubCategory,
-  deleteSubCategory,
-} from "../controllers/subCategory.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/rbac.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
-// --- Public Routes ---
-router.route("/").get(getAllCategories);
-router.route("/subs").get(getAllSubCategories); // List all subcategories
-router.route("/names").get(getCategoryNames); // Fetch category/subcategory names by ID
+// Public routes
+router.route("/").get(getAllCategories); // Returns tree structure
+router.route("/list").get(getCategoryList); // Returns flat list (for internal use/dropdowns)
 router.route("/:categoryId").get(getCategoryById);
 
-// --- Admin Routes ---
+// Admin routes
 router.use(verifyJWT, verifyAdmin);
 
-// Category management
-router.route("/").post(upload.single("backgroundImage"), createCategory);
-router.route("/:categoryId")
-  .patch(upload.single("backgroundImage"), updateCategory)
-  .delete(deleteCategory);
+router.route("/")
+    .post(upload.single("backgroundImage"), createCategory);
 
-// Subcategory management
-router.route("/subs").post(createSubCategory);
-router.route("/subs/:subCategoryId")
-  .patch(updateSubCategory)
-  .delete(deleteSubCategory);
+router.route("/:categoryId")
+    .patch(upload.single("backgroundImage"), updateCategory)
+    .delete(deleteCategory);
 
 export default router;
