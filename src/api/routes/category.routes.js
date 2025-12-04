@@ -2,29 +2,46 @@ import { Router } from "express";
 import {
     createCategory,
     getAllCategories,
+    getCategoryList,
     getCategoryById,
     updateCategory,
-    deleteCategory,
-    toggleCategoryPin
+    deleteCategory
 } from "../controllers/category.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { verifyAdmin } from "../middlewares/rbac.middleware.js"; // FIXED: Imported from rbac.middleware.js
+import { verifyAdmin } from "../middlewares/rbac.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
-// Public route for fetching categories
+// --- Consolidated Route Definitions ---
+
+// 1. Root Collection Routes
 router.route("/")
-    .get(getAllCategories)
-    .post(verifyJWT, verifyAdmin, upload.single("backgroundImage"), createCategory);
+    .get(getAllCategories) // Public: Get Tree
+    .post(
+        verifyJWT, 
+        verifyAdmin, 
+        upload.single("backgroundImage"), 
+        createCategory
+    ); // Admin: Create
 
+// 2. List Route (Dropdowns)
+router.route("/list")
+    .get(getCategoryList);
+
+// 3. Single Item Routes (Consolidated to prevent 404s)
 router.route("/:categoryId")
-    .get(getCategoryById)
-    .put(verifyJWT, verifyAdmin, upload.single("backgroundImage"), updateCategory)
-    .delete(verifyJWT, verifyAdmin, deleteCategory);
-
-// Pinning Route
-router.route("/:categoryId/pin")
-    .patch(verifyJWT, verifyAdmin, toggleCategoryPin);
+    .get(getCategoryById) // Public: Get One
+    .patch(
+        verifyJWT, 
+        verifyAdmin, 
+        upload.single("backgroundImage"), 
+        updateCategory
+    ) // Admin: Update (and Pin)
+    .delete(
+        verifyJWT, 
+        verifyAdmin, 
+        deleteCategory
+    ); // Admin: Delete
 
 export default router;

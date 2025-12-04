@@ -35,19 +35,15 @@ const categorySchema = new Schema(
       min: 1,
       max: 4 
     },
+    // New Field for Pinning (Root Only)
+    isPinned: {
+      type: Boolean,
+      default: false
+    },
     owner: {
       type: Schema.Types.ObjectId,
       ref: "User",
       default: null,
-    },
-    // --- Pinning System ---
-    isPinned: {
-      type: Boolean,
-      default: false,
-    },
-    pinnedAt: {
-      type: Date,
-      default: null, // Used for chronological sorting
     },
   },
   {
