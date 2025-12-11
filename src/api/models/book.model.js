@@ -5,17 +5,18 @@ const bookSchema = new Schema(
     {
         title: {
             type: String,
-            required: true, // KEEP REQUIRED
+            required: true,
             trim: true,
         },
         author: {
             type: String,
-            required: true, // KEEP REQUIRED
+            required: true,
             trim: true,
         },
         isbn: {
             type: String,
             trim: true
+            // Optional
         },
         publisher: {
             type: String,
@@ -34,7 +35,7 @@ const bookSchema = new Schema(
         format: {
             type: String,
             enum: ['Hardcover', 'Paperback'],
-            // Optional
+            // Optional - if not provided, it's undefined, which passes validation
         },
         language: {
             type: String,
@@ -43,6 +44,7 @@ const bookSchema = new Schema(
         },
         shortDescription: {
             type: String,
+            // Optional
         },
         fullDescription: {
             type: String,
@@ -55,18 +57,17 @@ const bookSchema = new Schema(
         }],
         price: {
             type: Number,
-            required: true, // KEEP REQUIRED (Regular Price)
+            required: true, // Regular Price (Required)
             min: 0,
         },
         salePrice: {
             type: Number,
-            default: 0,
+            required: true, // Sale Price (Required)
             min: 0,
-            // NOTE: Technically optional via default, but treated as a key field
         },
         deliveryCharge: {
             type: Number,
-            required: true, // KEEP REQUIRED
+            required: true, // Delivery Fee (Required)
             min: 0,
         },
         stock: {
@@ -88,7 +89,7 @@ const bookSchema = new Schema(
         uploadedBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
-            required: true, // System required (from req.user)
+            required: true, // Required for system tracking
         },
         isFeatured: {
             type: Boolean,

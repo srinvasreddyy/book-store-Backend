@@ -85,7 +85,12 @@ const initiateOrder = async (orderData, user, headers) => {
     let totalDeliveryFee = 0; // Initialize total delivery fee
 
     const orderedItems = cart.items.map((item) => {
-      subtotal += item.book.price * item.quantity;
+      // [FIX] Determine effective price: Use salePrice if it exists and is greater than 0
+      const effectivePrice = (item.book.salePrice && item.book.salePrice > 0) 
+        ? item.book.salePrice 
+        : item.book.price;
+
+      subtotal += effectivePrice * item.quantity;
       
       // --- FEATURE-023: Calculate per-item delivery charge ---
       // Use (item.book.deliveryCharge || 0) for robustness against old data
@@ -95,7 +100,7 @@ const initiateOrder = async (orderData, user, headers) => {
       return {
         book: item.book._id,
         quantity: item.quantity,
-        priceAtPurchase: item.book.price,
+        priceAtPurchase: effectivePrice, // [FIX] Store the effective price
         uploadedBy: item.book.uploadedBy,
       };
     });

@@ -26,28 +26,39 @@ const createBook = async (bookData, user, files) => {
     const isBestSeller = bookData.isBestSeller === 'true' || bookData.isBestSeller === true;
     const isOldBook = bookData.oldBook === 'true' || bookData.oldBook === true;
 
-    // Basic Validation
-    const requiredFields = { title, author, publisher, category, format, language, shortDescription, fullDescription };
+    // 1. Basic Validation - ONLY Mandatory Fields
+    const requiredFields = { title, author };
     for (const [field, value] of Object.entries(requiredFields)) {
         if (!value || String(value).trim() === "") {
             throw new ApiError(400, `${field.charAt(0).toUpperCase() + field.slice(1)} is required.`);
         }
     }
 
-    if (!['Hardcover', 'Paperback'].includes(format)) {
-        throw new ApiError(400, "Invalid format.");
+    // 2. Format Validation (Only if provided)
+    if (format && format.trim() !== "" && !['Hardcover', 'Paperback'].includes(format)) {
+        throw new ApiError(400, "Invalid format. Must be 'Hardcover' or 'Paperback'.");
     }
 
-    // Numeric Validation
-    [numberOfPages, price, stock, deliveryCharge].forEach((val, index) => {
-        const fieldNames = ['numberOfPages', 'price', 'stock', 'deliveryCharge'];
-        if (val === undefined || isNaN(Number(val)) || Number(val) < 0) {
-             throw new ApiError(400, `${fieldNames[index]} must be a valid non-negative number.`);
-        }
-    });
+    // 3. Numeric Validation (Mandatory fields: Price, Sale Price, Delivery Charge)
+    if (price === undefined || price === '' || isNaN(Number(price)) || Number(price) < 0) {
+        throw new ApiError(400, "Regular price is required and must be a valid non-negative number.");
+    }
+    
+    if (deliveryCharge === undefined || deliveryCharge === '' || isNaN(Number(deliveryCharge)) || Number(deliveryCharge) < 0) {
+         throw new ApiError(400, "Delivery charge is required and must be a valid non-negative number.");
+    }
 
-    if (salePrice !== undefined && (isNaN(Number(salePrice)) || Number(salePrice) < 0)) {
-        throw new ApiError(400, "Sale price must be a valid non-negative number.");
+    if (salePrice === undefined || salePrice === '' || isNaN(Number(salePrice)) || Number(salePrice) < 0) {
+        throw new ApiError(400, "Sale price is required and must be a valid non-negative number.");
+    }
+
+    // Optional Numeric Fields Validation
+    if (numberOfPages && (isNaN(Number(numberOfPages)) || Number(numberOfPages) < 0)) {
+        throw new ApiError(400, "Number of pages must be a valid non-negative number.");
+    }
+
+    if (stock && (isNaN(Number(stock)) || Number(stock) < 0)) {
+        throw new ApiError(400, "Stock must be a valid non-negative number.");
     }
 
     // File Validation
@@ -55,12 +66,16 @@ const createBook = async (bookData, user, files) => {
         throw new ApiError(400, "Max 10 cover images.");
     }
 
-    // Category Validation
-    if (!mongoose.isValidObjectId(category)) throw new ApiError(400, "Invalid category ID.");
-    const categoryDoc = await Category.findById(category);
-    if (!categoryDoc) throw new ApiError(404, "Category not found.");
+    // 4. Category Validation (Only if provided)
+    let categoryId = undefined;
+    if (category && category !== "undefined" && category !== "") {
+        if (!mongoose.isValidObjectId(category)) throw new ApiError(400, "Invalid category ID.");
+        const categoryDoc = await Category.findById(category);
+        if (!categoryDoc) throw new ApiError(404, "Category not found.");
+        categoryId = categoryDoc._id;
+    }
 
-    // ISBN Check
+    // ISBN Check (Optional but must be unique if provided)
     if (isbn && isbn.trim() !== "") {
         if (await Book.findOne({ isbn })) throw new ApiError(409, "ISBN already exists.");
     }
@@ -90,7 +105,7 @@ const createBook = async (bookData, user, files) => {
          tagIds = [...new Set(pIds)];
     }
 
-    // Image Upload - CHANGED TO USE PATH
+    // Image Upload
     let imageUrls = [];
     if (files?.coverImages) {
         imageUrls = (await Promise.all(files.coverImages.map(async (f) => {
@@ -100,7 +115,7 @@ const createBook = async (bookData, user, files) => {
         })));
     }
     
-    // PDF Upload - CHANGED TO USE PATH
+    // PDF Upload
     let samplePdfUrl = null;
     if (files.samplePdf?.[0]) {
         const r = await uploadOnCloudinary(files.samplePdf[0].path);
@@ -109,14 +124,27 @@ const createBook = async (bookData, user, files) => {
     }
 
     const book = await Book.create({
-        title, author, isbn, publisher, numberOfPages,
-        category: categoryDoc._id,
-        // Removed subCategory
-        format, language, shortDescription, fullDescription,
-        tags: tagIds, price, deliveryCharge, stock,
-        salePrice: salePrice ? Number(salePrice) : 0,
-        coverImages: imageUrls, samplePdfUrl,
-        uploadedBy: user._id, isFeatured, isBestSeller, oldBook: isOldBook
+        title, 
+        author, 
+        isbn, 
+        publisher, 
+        numberOfPages: numberOfPages ? Number(numberOfPages) : undefined,
+        category: categoryId,
+        format, 
+        language, 
+        shortDescription, 
+        fullDescription,
+        tags: tagIds, 
+        price, 
+        deliveryCharge, 
+        stock: stock ? Number(stock) : undefined,
+        salePrice: Number(salePrice),
+        coverImages: imageUrls, 
+        samplePdfUrl,
+        uploadedBy: user._id, 
+        isFeatured, 
+        isBestSeller, 
+        oldBook: isOldBook
     });
 
     clearBookCaches();
@@ -127,7 +155,6 @@ const getAllBooks = async (queryParams) => {
     const cacheKey = `allBooks_${JSON.stringify(queryParams)}`;
     if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-    // Added oldBook to filters
     const { page = 1, limit = 10, category, search, sortBy, sortOrder = 'asc', tags, isBestSeller, oldBook } = queryParams;
     const match = {};
 
@@ -172,11 +199,12 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
     
     delete bookData.uploadedBy; 
 
-    if (bookData.category && bookData.category !== book.category.toString()) {
-         if (!await Category.exists({ _id: bookData.category })) throw new ApiError(404, "New category not found.");
+    // Category Logic for Update (Optional)
+    if (bookData.category && bookData.category !== "undefined" && bookData.category !== "") {
+         if (bookData.category !== book.category?.toString()) {
+              if (!await Category.exists({ _id: bookData.category })) throw new ApiError(404, "New category not found.");
+         }
     }
-    
-    // Removed SubCategory logic
 
     let imagesToKeep = book.coverImages;
     if (bookData.coverImages !== undefined) {
@@ -186,7 +214,6 @@ const updateBookDetails = async (bookId, bookData, user, files) => {
 
     let newImageUrls = [];
     if (files?.coverImages?.length) {
-         // CHANGED TO USE PATH
          newImageUrls = (await Promise.all(files.coverImages.map(async (f) => {
              const result = await uploadOnCloudinary(f.path);
              if (!result?.url) throw new ApiError(500, `Image upload failed for ${f.originalname}`);
