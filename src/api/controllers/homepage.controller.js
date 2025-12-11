@@ -18,7 +18,6 @@ const findOrCreateHomepage = async (userId) => {
 const getHomepageByAdminId = asyncHandler(async (req, res) => {
   const { adminId } = req.params;
 
-  // --- Validation ---
   if (!mongoose.isValidObjectId(adminId)) {
     throw new ApiError(400, "Invalid admin ID format.");
   }
@@ -41,7 +40,7 @@ const getHomepageByAdminId = asyncHandler(async (req, res) => {
           carouselImages: [],
           youtubeVideos: [],
           shortVideos: [],
-          footerContent: {}, // Added for FEATURE-024
+          footerContent: {},
         },
         "This admin has not configured their homepage yet.",
       ),
@@ -55,11 +54,6 @@ const getHomepageByAdminId = asyncHandler(async (req, res) => {
 
 // --- PUBLIC CONTROLLER FOR CLIENT ---
 const getPublicHomepage = asyncHandler(async (req, res) => {
-  // Return any configured homepage content from any admin so public site
-  // can display content even if the "first" admin hasn't configured theirs.
-  // Look for any Homepage document that has at least one item in any of the
-  // content arrays. This aggregates public content across admins implicitly
-  // by returning the first non-empty homepage.
   const homepage = await Homepage.findOne({
     $or: [
       { 'carouselImages.0': { $exists: true } },
@@ -69,7 +63,6 @@ const getPublicHomepage = asyncHandler(async (req, res) => {
   }).populate('carouselImages.bookLink', 'title author');
 
   if (!homepage) {
-    // No configured homepage content found across admins
     return res.status(200).json(
       new ApiResponse(
         200,
@@ -77,7 +70,7 @@ const getPublicHomepage = asyncHandler(async (req, res) => {
           carouselImages: [],
           youtubeVideos: [],
           shortVideos: [],
-          footerContent: {}, // Added for FEATURE-024
+          footerContent: {},
         },
         'Homepage not configured yet.',
       ),
@@ -91,13 +84,17 @@ const getPublicHomepage = asyncHandler(async (req, res) => {
 
 const addCarouselImage = asyncHandler(async (req, res) => {
   const { title, subtitle, bookLink } = req.body;
-  const imageLocalPath = req.file?.buffer;
+  // FIX: Use req.file.path instead of req.file.buffer because multer uses diskStorage
+  const imageLocalPath = req.file?.path; 
 
   // --- Validation ---
   if (!title || title.trim() === "")
     throw new ApiError(400, "A title is required for the carousel image.");
+  
+  // This check was failing because req.file.buffer was undefined
   if (!imageLocalPath)
     throw new ApiError(400, "An image file must be uploaded.");
+    
   if (bookLink && !mongoose.isValidObjectId(bookLink))
     throw new ApiError(400, "Invalid Book ID format for book link.");
 
@@ -174,7 +171,6 @@ const addYoutubeVideo = asyncHandler(async (req, res) => {
   const { title, description, videoUrl } = req.body;
   const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
 
-  // --- Validation ---
   if (!title || title.trim() === "")
     throw new ApiError(400, "A title is required.");
   if (!videoUrl || !youtubeRegex.test(videoUrl))
@@ -244,9 +240,9 @@ const updateYoutubeVideo = asyncHandler(async (req, res) => {
 
 const addShortVideo = asyncHandler(async (req, res) => {
   const { title, description } = req.body;
-  const videoLocalPath = req.file?.buffer;
+  // FIX: Use req.file.path instead of req.file.buffer
+  const videoLocalPath = req.file?.path;
 
-  // --- Validation ---
   if (!title || title.trim() === "")
     throw new ApiError(400, "A title is required.");
   if (!videoLocalPath)
@@ -256,7 +252,6 @@ const addShortVideo = asyncHandler(async (req, res) => {
   if (!video?.url) throw new ApiError(500, "Failed to upload video.");
 
   if (video.duration > 180) {
-    // TODO: Delete the just-uploaded video from Cloudinary to clean up.
     throw new ApiError(
       400,
       "Video duration cannot exceed 3 minutes (180 seconds).",
@@ -335,12 +330,10 @@ const updateFooterContent = asyncHandler(async (req, res) => {
   
   const homepage = await findOrCreateHomepage(req.user._id);
 
-  // Ensure the footerContent object exists
   if (!homepage.footerContent) {
     homepage.footerContent = {};
   }
 
-  // Set or clear each field based on the request body
   homepage.footerContent.email = email ?? homepage.footerContent.email;
   homepage.footerContent.phoneNumber = phoneNumber ?? homepage.footerContent.phoneNumber;
   homepage.footerContent.facebookUrl = facebookUrl ?? homepage.footerContent.facebookUrl;
@@ -353,17 +346,15 @@ const updateFooterContent = asyncHandler(async (req, res) => {
       .status(200)
       .json(new ApiResponse(200, updatedHomepage, "Footer content updated successfully."));
   } catch (error) {
-    // Handle validation errors from the schema
     if (error.name === 'ValidationError') {
       throw new ApiError(400, "Validation failed: " + error.message);
     }
     throw error;
   }
 });
-// --- End FEATURE-024 ---
 
 export {
-  getHomepageByAdminId as getHomepageByUsername, // aliasing for backward compatibility in exports if needed elsewhere
+  getHomepageByAdminId as getHomepageByUsername,
   getHomepageByAdminId,
   getPublicHomepage,
   addCarouselImage,

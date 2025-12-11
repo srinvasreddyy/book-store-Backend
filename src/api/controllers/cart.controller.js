@@ -8,7 +8,9 @@ import mongoose from "mongoose";
 const getCart = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user._id }).populate({
     path: "items.book",
-    select: "title author price stock coverImage deliveryCharge",
+    // FIX: Added 'salePrice' to the select string so the frontend can use it for calculation.
+    // FIX: Changed 'coverImage' to 'coverImages' to match the Book model schema.
+    select: "title author price salePrice stock coverImages deliveryCharge",
   });
 
   if (!cart) {
@@ -25,9 +27,22 @@ const getCart = asyncHandler(async (req, res) => {
       );
   }
 
+  // --- FIX START: Filter out items where the book has been deleted ---
+  // If a book is deleted from the DB, 'item.book' will be null after populate.
+  // We must filter these out to prevent the "reading 'stock' of null" error.
+  const validItems = cart.items.filter(item => item.book != null);
+
+  // If we found invalid items, update the cart in the database to clean it up
+  if (validItems.length !== cart.items.length) {
+      cart.items = validItems;
+      await cart.save();
+  }
+  // --- FIX END ---
+
   // Add stock availability information to each item
-  const itemsWithStockInfo = cart.items.map((item) => ({
+  const itemsWithStockInfo = validItems.map((item) => ({
     ...item.toObject(),
+    // We can safely access item.book.stock now because we filtered out nulls
     isAvailable: item.book.stock >= item.quantity,
     availableStock: item.book.stock,
   }));
@@ -96,15 +111,17 @@ const addItemToCart = asyncHandler(async (req, res) => {
   }
 
   await cart.save();
-  const populatedCart = await cart.populate({
+  // Populate for response
+  await cart.populate({
     path: "items.book",
-    select: "title author price stock coverImage deliveryCharge",
+    // FIX: Added 'salePrice' and corrected 'coverImages'
+    select: "title author price salePrice stock coverImages deliveryCharge",
   });
 
   return res
     .status(200)
     .json(
-      new ApiResponse(200, populatedCart, "Item added to cart successfully."),
+      new ApiResponse(200, cart, "Item added to cart successfully."),
     );
 });
 
@@ -123,7 +140,8 @@ const removeItemFromCart = asyncHandler(async (req, res) => {
     { new: true },
   ).populate({
     path: "items.book",
-    select: "title author price stock coverImage deliveryCharge",
+    // FIX: Added 'salePrice' and corrected 'coverImages'
+    select: "title author price salePrice stock coverImages deliveryCharge",
   });
 
   if (!cart) {

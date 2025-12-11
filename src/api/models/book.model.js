@@ -5,53 +5,49 @@ const bookSchema = new Schema(
     {
         title: {
             type: String,
-            required: true,
+            required: true, // KEEP REQUIRED
             trim: true,
-            // index: "text", <--- REMOVED (Defined at bottom)
         },
         author: {
             type: String,
-            required: true,
+            required: true, // KEEP REQUIRED
             trim: true,
-            // index: "text", <--- REMOVED (Defined at bottom)
         },
         isbn: {
             type: String,
-            required: false,
             trim: true
         },
         publisher: {
             type: String,
-            required: true,
             trim: true,
+            // Optional
         },
         numberOfPages: {
             type: Number,
-            required: true,
+            // Optional
         },
         category: {
             type: Schema.Types.ObjectId,
             ref: "Category",
-            required: true,
+            // Optional
         },
-        // subCategory field is removed as per new architecture
         format: {
             type: String,
-            required: true,
             enum: ['Hardcover', 'Paperback'],
+            // Optional
         },
         language: {
             type: String,
-            required: true,
             trim: true,
+            // Optional
         },
         shortDescription: {
             type: String,
         },
         fullDescription: {
             type: String,
-            required: true,
             trim: true,
+            // Optional
         },
         tags: [{
             type: Schema.Types.ObjectId,
@@ -59,22 +55,23 @@ const bookSchema = new Schema(
         }],
         price: {
             type: Number,
-            required: true,
+            required: true, // KEEP REQUIRED (Regular Price)
             min: 0,
         },
         salePrice: {
             type: Number,
             default: 0,
             min: 0,
+            // NOTE: Technically optional via default, but treated as a key field
         },
         deliveryCharge: {
             type: Number,
-            required: true,
+            required: true, // KEEP REQUIRED
             min: 0,
         },
         stock: {
             type: Number,
-            required: true,
+            // Optional
         },
         coverImages: {
             type: [String],
@@ -91,7 +88,7 @@ const bookSchema = new Schema(
         uploadedBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
-            required: true,
+            required: true, // System required (from req.user)
         },
         isFeatured: {
             type: Boolean,
@@ -111,7 +108,7 @@ const bookSchema = new Schema(
     }
 );
 
-// ✅ FIX: Explicitly define index with a dummy override so it ignores your 'language' field
+// Explicitly define index with a dummy override so it ignores your 'language' field
 bookSchema.index(
     { title: "text", author: "text" }, 
     { language_override: "dummy_language_field" }
