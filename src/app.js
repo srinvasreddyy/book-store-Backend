@@ -16,17 +16,22 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "https://indianbookshouse.in",
+  "https://www.indianbookshouse.in", // Added www version just in case
   "https://admin.indianbookshouse.in",
   ...(process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(",")
+    ? process.env.CORS_ORIGIN.split(",").map(origin => origin.trim()) // Trim whitespace
     : []),
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || process.env.CORS_ORIGIN === "*") {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin) || process.env.CORS_ORIGIN === "*") {
       callback(null, true);
     } else {
+      console.error(`Blocked by CORS: ${origin}`); // Log blocked origins for debugging
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -58,7 +63,7 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", ...allowedOrigins], // Allow connections to allowed origins
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
