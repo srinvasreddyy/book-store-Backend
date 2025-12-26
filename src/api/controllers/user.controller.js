@@ -42,11 +42,14 @@ const generateAccessAndRefreshTokens = async (userId) => {
 // --- Controller Functions ---
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { fullName, email, password, role } = req.body;
+  const { fullName, email, password, role, phoneNumber } = req.body;
 
   // --- Input Validation ---
   if (isNullOrWhitespace(fullName)) {
     throw new ApiError(400, "Full name is required.");
+  }
+  if (isNullOrWhitespace(phoneNumber)) {
+    throw new ApiError(400, "Phone number is required.");
   }
   if (!isValidEmail(email)) {
     throw new ApiError(400, "A valid email address is required.");
@@ -70,6 +73,7 @@ const registerUser = asyncHandler(async (req, res) => {
   const userToCreate = {
     fullName,
     email: email.toLowerCase(),
+    phoneNumber,
     password,
   };
 
@@ -105,9 +109,6 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Invalid user credentials.");
   }
   
-  // *** THIS IS THE LINE THAT CAUSES THE ERROR ***
-  // It checks if the role from the request ('ADMIN') matches the user's role in the database.
-  // If user.role is 'CUSTOMER', it throws an error.
   if (role && user.role !== role) { 
     throw new ApiError(
       403,
@@ -150,7 +151,7 @@ const loginUser = asyncHandler(async (req, res) => {
 const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
-    { $unset: { refreshToken: 1 } }, // Use $unset for cleaner removal
+    { $unset: { refreshToken: 1 } }, 
     { new: true },
   );
 
@@ -188,8 +189,6 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 
     if (incomingRefreshToken !== user?.refreshToken) {
-      // This is a security measure. If an old token is used, it might be compromised.
-      // Invalidate all tokens for this user.
       user.refreshToken = undefined;
       await user.save({ validateBeforeSave: false });
       throw new ApiError(
@@ -220,7 +219,6 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    // Handle JWT errors (like TokenExpiredError) gracefully
     throw new ApiError(
       401,
       error?.message || "Invalid or expired refresh token.",
@@ -232,7 +230,6 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const user = await User.findById(req.user?._id);
 
-  // --- Input Validation ---
   if (isNullOrWhitespace(oldPassword)) {
     throw new ApiError(400, "Current password is required.");
   }
@@ -250,7 +247,6 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   }
 
   if (!user) {
-    // This should not happen if verifyJWT middleware is working, but it's a good safeguard.
     throw new ApiError(404, "User not found.");
   }
 
@@ -276,7 +272,6 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 const updateAccountDetails = asyncHandler(async (req, res) => {
   const { fullName, email } = req.body;
 
-  // --- Input Validation ---
   if (isNullOrWhitespace(fullName)) {
     throw new ApiError(400, "Full name cannot be empty.");
   }
@@ -286,7 +281,6 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 
   const newEmail = email.toLowerCase();
 
-  // Check if the new email is already taken by ANOTHER user
   if (newEmail !== req.user.email) {
     const emailExists = await User.findOne({ email: newEmail });
     if (emailExists) {
@@ -315,13 +309,20 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Account details updated successfully."));
 });
 
-// --- NEW: Password Reset Controllers ---
+// --- Admin: Get All Users ---
 
-/**
- * @route POST /api/v1/users/forgot-password
- * @desc Send a password reset OTP to the user's email
- * @access Public
- */
+const getAllUsers = asyncHandler(async (req, res) => {
+  const users = await User.find({ role: "CUSTOMER" })
+    .select("-password -refreshToken -passwordResetOTP -passwordResetExpires")
+    .sort({ createdAt: -1 });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, users, "Users fetched successfully."));
+});
+
+// --- Password Reset Controllers ---
+
 const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
@@ -331,10 +332,9 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({
     email: email.toLowerCase(),
-    role: "CUSTOMER", // Only allow for customers
+    role: "CUSTOMER",
   });
 
-  // Security: Always return a success-like message to prevent user enumeration
   if (!user) {
     return res
       .status(200)
@@ -347,16 +347,13 @@ const forgotPassword = asyncHandler(async (req, res) => {
       );
   }
 
-  // Generate a 6-digit OTP
   const otp = crypto.randomInt(100000, 1000000).toString();
 
-  // Set OTP and 10-minute expiry
   user.passwordResetOTP = otp;
-  user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); 
   await user.save({ validateBeforeSave: false });
 
   try {
-    // Send the email
     const emailSubject = "Your Password Reset OTP (Valid for 10 min)";
     const emailText = `Your password reset OTP is: ${otp}. It will expire in 10 minutes.`;
     const emailHtml = getOTPEmailTemplate(otp);
@@ -373,7 +370,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
         ),
       );
   } catch (error) {
-    // Clear the token if the email failed to send, so the user can try again
     user.passwordResetOTP = undefined;
     user.passwordResetExpires = undefined;
     await user.save({ validateBeforeSave: false });
@@ -385,11 +381,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/v1/users/verify-otp
- * @desc Verify the OTP sent to the user's email
- * @access Public
- */
 const verifyPasswordOTP = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
 
@@ -403,7 +394,7 @@ const verifyPasswordOTP = asyncHandler(async (req, res) => {
   const user = await User.findOne({
     email: email.toLowerCase(),
     passwordResetOTP: otp,
-    passwordResetExpires: { $gt: Date.now() }, // Check if not expired
+    passwordResetExpires: { $gt: Date.now() }, 
   });
 
   if (!user) {
@@ -415,15 +406,9 @@ const verifyPasswordOTP = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { email, otp }, "OTP verified successfully."));
 });
 
-/**
- * @route POST /api/v1/users/reset-password
- * @desc Reset the user's password after successful OTP verification
- * @access Public
- */
 const resetPassword = asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
 
-  // --- Input Validation ---
   if (!isValidEmail(email)) {
     throw new ApiError(400, "A valid email is required.");
   }
@@ -436,9 +421,7 @@ const resetPassword = asyncHandler(async (req, res) => {
       "New password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.",
     );
   }
-  // --- End Validation ---
 
-  // Find user by email, OTP, and check expiry
   const user = await User.findOne({
     email: email.toLowerCase(),
     passwordResetOTP: otp,
@@ -449,7 +432,6 @@ const resetPassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid or expired OTP. Please request a new one.");
   }
 
-  // Check if new password is the same as the old one
   const isSamePassword = await user.isPasswordCorrect(newPassword);
   if (isSamePassword) {
     throw new ApiError(
@@ -458,14 +440,11 @@ const resetPassword = asyncHandler(async (req, res) => {
     );
   }
 
-  // Update password
   user.password = newPassword;
-
-  // Invalidate the OTP
   user.passwordResetOTP = undefined;
   user.passwordResetExpires = undefined;
 
-  await user.save(); // The 'pre-save' hook will hash the password
+  await user.save(); 
 
   return res
     .status(200)
@@ -483,4 +462,5 @@ export {
   forgotPassword,
   verifyPasswordOTP,
   resetPassword,
+  getAllUsers,
 };

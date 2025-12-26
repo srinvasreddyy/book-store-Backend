@@ -11,6 +11,11 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
     },
+    phoneNumber: {
+      type: String,
+      required: [true, "Phone number is required"],
+      trim: true,
+    },
     fullName: {
       type: String,
       required: true,

@@ -10,8 +10,10 @@ import {
   forgotPassword,
   verifyPasswordOTP,
   resetPassword,
+  getAllUsers,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyAdmin } from "../middlewares/rbac.middleware.js";
 
 const router = Router();
 
@@ -30,5 +32,9 @@ router.route("/refresh-token").post(refreshAccessToken);
 router.route("/change-password").post(verifyJWT, changeCurrentPassword);
 router.route("/current-user").get(verifyJWT, getCurrentUser);
 router.route("/update-account").patch(verifyJWT, updateAccountDetails);
+
+// --- Admin Routes ---
+// This route will handle GET /api/v1/users/ for the admin panel
+router.route("/").get(verifyJWT, verifyAdmin, getAllUsers);
 
 export default router;
